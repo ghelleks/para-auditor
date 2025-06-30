@@ -12,7 +12,7 @@ class ItemType(Enum):
     AREA = "Area"
 
 
-class SourceType(Enum):
+class ItemSource(Enum):
     """Enum for source types where items are found."""
     TODOIST = "todoist"
     APPLE_NOTES = "apple_notes"
@@ -31,10 +31,10 @@ class PARAItem:
     """Represents a PARA method item (Project or Area) from any source."""
     
     name: str
-    item_type: ItemType
+    type: ItemType
     is_active: bool
     category: CategoryType
-    source: SourceType
+    source: ItemSource
     raw_name: Optional[str] = None  # Original name before normalization
     metadata: Optional[Dict[str, Any]] = None
     
@@ -59,11 +59,11 @@ class PARAItem:
         if not self.name or not self.name.strip():
             raise ValueError("Item name cannot be empty")
             
-        if not isinstance(self.item_type, ItemType):
-            raise ValueError("item_type must be an ItemType enum")
+        if not isinstance(self.type, ItemType):
+            raise ValueError("type must be an ItemType enum")
             
-        if not isinstance(self.source, SourceType):
-            raise ValueError("source must be a SourceType enum")
+        if not isinstance(self.source, ItemSource):
+            raise ValueError("source must be a ItemSource enum")
             
         if not isinstance(self.category, CategoryType):
             raise ValueError("category must be a CategoryType enum")
@@ -178,7 +178,7 @@ class PARAItem:
             return False
             
         # Check type consistency
-        if self.item_type != other.item_type:
+        if self.type != other.type:
             return False
             
         # Check active status consistency
@@ -196,7 +196,7 @@ class PARAItem:
         return {
             "name": self.name,
             "raw_name": self.raw_name,
-            "item_type": self.item_type.value,
+            "type": self.type.value,
             "is_active": self.is_active,
             "category": self.category.value,
             "source": self.source.value,
@@ -209,10 +209,10 @@ class PARAItem:
         """Create PARAItem from dictionary."""
         return cls(
             name=data["name"],
-            item_type=ItemType(data["item_type"]),
+            type=ItemType(data["type"]),
             is_active=data["is_active"],
             category=CategoryType(data["category"]),
-            source=SourceType(data["source"]),
+            source=ItemSource(data["source"]),
             raw_name=data.get("raw_name"),
             metadata=data.get("metadata")
         )
@@ -223,12 +223,12 @@ class PARAItem:
         active_status = "✅" if self.is_active else "⭕"
         
         return (f"{emoji_status} {active_status} {self.raw_name or self.name} "
-                f"({self.item_type.value}, {self.category.value}, {self.source.value})")
+                f"({self.type.value}, {self.category.value}, {self.source.value})")
     
     def __repr__(self) -> str:
         """Detailed representation of PARAItem."""
         return (f"PARAItem(name='{self.name}', raw_name='{self.raw_name}', "
-                f"type={self.item_type}, active={self.is_active}, "
+                f"type={self.type}, active={self.is_active}, "
                 f"category={self.category}, source={self.source})")
     
     def __eq__(self, other) -> bool:
