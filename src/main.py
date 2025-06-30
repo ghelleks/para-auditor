@@ -4,11 +4,17 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from .config_manager import ConfigManager, ConfigError
 from .auth.google_auth import GoogleAuthenticator, GoogleAuthError
 from .auth.todoist_auth import TodoistAuthenticator, TodoistAuthError
+from .connectors.todoist_connector import TodoistConnector
+from .connectors.gdrive_connector import GDriveConnector
+from .connectors.apple_notes_connector import AppleNotesConnector
+from .auditor.comparator import ItemComparator
+from .auditor.report_generator import ReportGenerator
+from .models.para_item import PARAItem, ItemType, CategoryType
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -302,31 +308,111 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
             print("💡 Run 'para-auditor --setup' to configure authentication")
             return 1
         
-        # TODO: Implement audit logic here
-        # This will be implemented in Phase 3-5
-        print("\n⚠️  Audit functionality not yet implemented.")
-        print("This will be available in Phase 3-5 of development.")
+        # Run the audit
+        print("\n🔍 Starting PARA Audit...")
+        print("-" * 23)
         
-        # Show what would be audited
-        print("\n📊 Audit Configuration:")
-        print(f"  • Work Domain: {config_manager.work_domain}")
-        print(f"  • Personal Domain: {config_manager.personal_domain}")
-        print(f"  • Projects Folder: {config_manager.projects_folder}")
-        print(f"  • Areas Folder: {config_manager.areas_folder}")
-        print(f"  • Similarity Threshold: {config_manager.similarity_threshold}")
-        print(f"  • Report Format: {config_manager.report_format}")
-        
-        if args.work_only:
-            print("  • Filter: Work items only")
-        elif args.personal_only:
-            print("  • Filter: Personal items only")
+        try:
+            # Collect data from all sources
+            print("📥 Collecting data from sources...")
+            all_items = []
             
-        if args.projects_only:
-            print("  • Filter: Projects only")
-        elif args.areas_only:
-            print("  • Filter: Areas only")
-        
-        return 0
+            # Collect from Todoist
+            if not args.dry_run:
+                print("  • Fetching Todoist projects...")
+                todoist_connector = TodoistConnector(
+                    config_manager.todoist_token,
+                    work_domains=[config_manager.work_domain],
+                    personal_domains=[config_manager.personal_domain]
+                )
+                todoist_items = todoist_connector.get_projects()
+                all_items.extend(todoist_items)
+                print(f"    Found {len(todoist_items)} Todoist projects")
+            
+            # Collect from Google Drive (Work)
+            if not args.dry_run:
+                print("  • Fetching work Google Drive folders...")
+                work_credentials = google_auth.get_credentials('work')
+                work_connector = GDriveConnector(work_credentials, 'work')
+                work_items = work_connector.get_para_folders()
+                all_items.extend(work_items)
+                print(f"    Found {len(work_items)} work folders")
+            
+            # Collect from Google Drive (Personal)
+            if not args.dry_run:
+                print("  • Fetching personal Google Drive folders...")
+                personal_credentials = google_auth.get_credentials('personal')
+                personal_connector = GDriveConnector(personal_credentials, 'personal')
+                personal_items = personal_connector.get_para_folders()
+                all_items.extend(personal_items)
+                print(f"    Found {len(personal_items)} personal folders")
+            
+            # Collect from Apple Notes
+            if not args.dry_run:
+                print("  • Fetching Apple Notes folders...")
+                notes_connector = AppleNotesConnector()
+                notes_items = notes_connector.get_para_folders()
+                all_items.extend(notes_items)
+                print(f"    Found {len(notes_items)} Apple Notes folders")
+            
+            # Apply filters
+            filtered_items = apply_filters(all_items, args)
+            
+            if args.dry_run:
+                print("🔍 Dry run mode - showing configuration only")
+                print_audit_configuration(config_manager, args)
+                return 0
+            
+            print(f"\n📊 Analyzing {len(filtered_items)} items...")
+            
+            # Compare items and find inconsistencies
+            comparator = ItemComparator(
+                similarity_threshold=args.threshold,
+                strict_mode=False
+            )
+            comparison_result = comparator.compare_items(filtered_items)
+            
+            # Generate report
+            report_generator = ReportGenerator()
+            
+            # Determine output format
+            output_format = getattr(args, 'format', 'markdown')
+            
+            # Generate metadata
+            metadata_overrides = {
+                'filters_applied': {
+                    'work_only': args.work_only,
+                    'personal_only': args.personal_only,
+                    'projects_only': args.projects_only,
+                    'areas_only': args.areas_only,
+                    'threshold': args.threshold
+                }
+            }
+            
+            # Generate and output report
+            report_content = report_generator.generate_report(
+                result=comparison_result,
+                format_type=output_format,
+                output_path=args.output,
+                metadata_overrides=metadata_overrides
+            )
+            
+            # Print to console if no output file specified
+            if not args.output:
+                print("\n" + "="*60)
+                print(report_content)
+            else:
+                print(f"\n✅ Report saved to: {args.output}")
+            
+            # Print summary
+            print_audit_summary(comparison_result)
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Audit failed: {e}")
+            print(f"❌ Audit failed: {e}")
+            return 1
         
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
@@ -337,6 +423,67 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
         logger.error(f"Unexpected error during audit: {e}")
         print(f"❌ Unexpected error: {e}")
         return 1
+
+
+def apply_filters(items: List[PARAItem], args: argparse.Namespace) -> List[PARAItem]:
+    """Apply command-line filters to items."""
+    filtered_items = items
+    
+    # Filter by category
+    if args.work_only:
+        filtered_items = [item for item in filtered_items if item.category == CategoryType.WORK]
+    elif args.personal_only:
+        filtered_items = [item for item in filtered_items if item.category == CategoryType.PERSONAL]
+    
+    # Filter by type
+    if args.projects_only:
+        filtered_items = [item for item in filtered_items if item.type == ItemType.PROJECT]
+    elif args.areas_only:
+        filtered_items = [item for item in filtered_items if item.type == ItemType.AREA]
+    
+    return filtered_items
+
+
+def print_audit_configuration(config_manager: ConfigManager, args: argparse.Namespace) -> None:
+    """Print audit configuration for dry run mode."""
+    print("\n📊 Audit Configuration:")
+    print(f"  • Work Domain: {config_manager.work_domain}")
+    print(f"  • Personal Domain: {config_manager.personal_domain}")
+    print(f"  • Projects Folder: {config_manager.projects_folder}")
+    print(f"  • Areas Folder: {config_manager.areas_folder}")
+    print(f"  • Similarity Threshold: {args.threshold}")
+    print(f"  • Report Format: {getattr(args, 'format', 'markdown')}")
+    
+    if args.work_only:
+        print("  • Filter: Work items only")
+    elif args.personal_only:
+        print("  • Filter: Personal items only")
+        
+    if args.projects_only:
+        print("  • Filter: Projects only")
+    elif args.areas_only:
+        print("  • Filter: Areas only")
+
+
+def print_audit_summary(result) -> None:
+    """Print audit summary to console."""
+    print(f"\n📈 Audit Summary:")
+    print(f"  • Consistency Score: {result.consistency_score:.1%}")
+    print(f"  • Total Items: {result.total_items}")
+    print(f"  • Consistent Items: {result.consistent_items}")
+    print(f"  • Issues Found: {len(result.inconsistencies)}")
+    
+    if result.inconsistencies:
+        print(f"    - High Priority: {result.high_severity_count}")
+        print(f"    - Medium Priority: {result.medium_severity_count}")
+        print(f"    - Low Priority: {result.low_severity_count}")
+    
+    if result.consistency_score >= 0.9:
+        print("  🎉 Excellent consistency!")
+    elif result.consistency_score >= 0.7:
+        print("  👍 Good consistency with room for improvement")
+    else:
+        print("  ⚠️  Significant inconsistencies detected")
 
 
 def main(argv: Optional[list] = None) -> int:
