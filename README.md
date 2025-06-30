@@ -33,24 +33,43 @@ pip install -r requirements.txt
 
 ### Basic Usage
 
+**Option 1: Direct script (no installation required)**
 ```bash
 # Create default configuration
-python -m src.main --create-config
+./para-auditor --create-config
 
 # Edit the configuration file with your API tokens
 # config/config.yaml
 
 # Run setup to authenticate with all services
-python -m src.main --setup
+./para-auditor --setup
 
-# Run audit (Phase 3-5 - not yet implemented)
-python -m src.main
+# Run audit
+./para-auditor
+```
+
+**Option 2: Install as package**
+```bash
+# Install in development mode
+pip install -e .
+
+# Now you can use para-auditor from anywhere
+para-auditor --create-config
+para-auditor --setup
+para-auditor
+```
+
+**Option 3: Python module (legacy)**
+```bash
+python -m src.main --help
 ```
 
 ### CLI Options
 
 ```bash
-python -m src.main --help
+./para-auditor --help
+# or
+para-auditor --help
 ```
 
 Key options:
@@ -112,8 +131,8 @@ audit_settings:
 
 - **Phase 1** ✅ Foundation (Complete)
 - **Phase 2** ✅ Authentication (Complete)
-- **Phase 3** ⏳ Data Collection (Not started) 
-- **Phase 4** ⏳ Comparison Logic (Not started)
+- **Phase 3** ✅ Data Collection (Complete) 
+- **Phase 4** ✅ Comparison Logic (Complete)
 - **Phase 5** ⏳ Reporting (Not started)
 - **Phase 6** ⏳ Testing & Polish (Not started)
 
@@ -143,7 +162,8 @@ audit_settings:
 ```bash
 # 1. Configure your tokens in config.yaml
 # 2. Run interactive setup
-python -m src.main --setup
+./para-auditor --setup
+# or: para-auditor --setup (if installed)
 
 # This will:
 # - Validate Todoist connection
