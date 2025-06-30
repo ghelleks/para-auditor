@@ -10,6 +10,14 @@ A Python tool for auditing consistency of PARA method organization across multip
 ✅ **CLI Framework**: Complete command-line interface with comprehensive options  
 ✅ **Package Setup**: Installation scripts, dependencies, and virtual environment support  
 
+## Phase 2 - Authentication (COMPLETED)
+
+✅ **Google OAuth**: Desktop application OAuth flow with multiple account support  
+✅ **Todoist Authentication**: API token validation and connection testing  
+✅ **Setup Command**: Interactive setup mode with step-by-step authentication  
+✅ **Token Management**: Secure credential storage and automatic refresh  
+✅ **Domain Validation**: Work vs personal account identification and validation  
+
 ## Quick Start
 
 ### Installation
@@ -29,10 +37,10 @@ pip install -r requirements.txt
 # Create default configuration
 python -m src.main --create-config
 
-# Edit the configuration file
+# Edit the configuration file with your API tokens
 # config/config.yaml
 
-# Run setup (Phase 2 - not yet implemented)
+# Run setup to authenticate with all services
 python -m src.main --setup
 
 # Run audit (Phase 3-5 - not yet implemented)
@@ -103,7 +111,7 @@ audit_settings:
 ## Development Status
 
 - **Phase 1** ✅ Foundation (Complete)
-- **Phase 2** ⏳ Authentication (Not started)
+- **Phase 2** ✅ Authentication (Complete)
 - **Phase 3** ⏳ Data Collection (Not started) 
 - **Phase 4** ⏳ Comparison Logic (Not started)
 - **Phase 5** ⏳ Reporting (Not started)
@@ -115,12 +123,40 @@ audit_settings:
 - **Python 3.8+**
 - Internet connection for OAuth and API calls
 
+## Authentication Setup
+
+### Prerequisites
+
+1. **Todoist API Token**:
+   - Go to [Todoist Settings → Integrations](https://todoist.com/prefs/integrations)
+   - Copy your API token from the Developer section
+   - Add it to `config/config.yaml`
+
+2. **Google Cloud Setup**:
+   - Create project at [Google Cloud Console](https://console.cloud.google.com/)
+   - Enable Google Drive API
+   - Create OAuth 2.0 credentials (Desktop application)
+   - Download as `client_secrets.json` and place in `config/` directory
+
+### Setup Process
+
+```bash
+# 1. Configure your tokens in config.yaml
+# 2. Run interactive setup
+python -m src.main --setup
+
+# This will:
+# - Validate Todoist connection
+# - Authenticate work Google account
+# - Authenticate personal Google account
+# - Test all connections
+```
+
 ## Next Steps
 
 To continue development:
 
-1. **Phase 2**: Implement Google OAuth flows and Todoist authentication
-2. **Phase 3**: Add connectors for all three services (Todoist API, Google Drive API, AppleScript)
-3. **Phase 4**: Implement comparison logic and inconsistency detection
-4. **Phase 5**: Build comprehensive reporting system
-5. **Phase 6**: Add tests and polish the user experience
+1. **Phase 3**: Add connectors for all three services (Todoist API, Google Drive API, AppleScript)
+2. **Phase 4**: Implement comparison logic and inconsistency detection
+3. **Phase 5**: Build comprehensive reporting system
+4. **Phase 6**: Add tests and polish the user experience

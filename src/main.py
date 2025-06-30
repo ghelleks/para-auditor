@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from .config_manager import ConfigManager, ConfigError
+from .auth.google_auth import GoogleAuthenticator, GoogleAuthError
+from .auth.todoist_auth import TodoistAuthenticator, TodoistAuthError
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -145,13 +147,117 @@ def handle_setup_mode(config_manager: ConfigManager) -> int:
             logger.info("Creating default configuration file...")
             config_manager.create_default_config()
             print(f"✅ Default configuration created at: {config_manager.config_path}")
-            print("Please edit the configuration file with your API tokens and settings.")
+            print("Please edit the configuration file with your API tokens and settings before running setup again.")
             return 0
         
-        # TODO: Implement OAuth setup flows here
-        # This will be implemented in Phase 2
-        logger.info("Configuration file already exists.")
-        print("⚠️  OAuth setup not yet implemented. This will be available in Phase 2.")
+        print("🔧 PARA Auditor Setup")
+        print("====================")
+        
+        # Load configuration
+        try:
+            config_manager.load_config()
+        except ConfigError as e:
+            print(f"❌ Configuration error: {e}")
+            print("Please fix your configuration file and try again.")
+            return 1
+        
+        # Initialize authenticators
+        google_auth = GoogleAuthenticator(config_manager)
+        todoist_auth = TodoistAuthenticator(config_manager)
+        
+        # Step 1: Validate Todoist connection
+        print("\n📋 Step 1: Validating Todoist Connection")
+        print("-" * 40)
+        
+        todoist_result = todoist_auth.validate_connection_detailed()
+        
+        if not todoist_result['token_configured']:
+            print("❌ Todoist API token not configured")
+            print(todoist_auth.get_token_instructions())
+            return 1
+        elif not todoist_result['token_valid']:
+            print("❌ Todoist API token is invalid")
+            print("Please check your token in the configuration file.")
+            print(todoist_auth.get_token_instructions())
+            return 1
+        else:
+            print("✅ Todoist API connection successful")
+            user_info = todoist_result.get('user_info', {})
+            if user_info:
+                print(f"   Projects found: {user_info.get('project_count', 'Unknown')}")
+        
+        # Step 2: Setup Google OAuth for work account
+        print("\n🏢 Step 2: Setting up Work Google Account")
+        print("-" * 42)
+        
+        work_domain = config_manager.work_domain
+        print(f"Expected work domain: {work_domain}")
+        
+        if not Path("config/client_secrets.json").exists():
+            print("❌ Google OAuth client secrets file not found")
+            print("\nTo set up Google Drive access:")
+            print("1. Go to Google Cloud Console: https://console.cloud.google.com/")
+            print("2. Create a new project or select existing")
+            print("3. Enable Google Drive API")
+            print("4. Create OAuth 2.0 credentials (Desktop application)")
+            print("5. Download as 'client_secrets.json' and place in config/ directory")
+            return 1
+        
+        try:
+            if not google_auth.is_authenticated('work'):
+                print("Setting up work account authentication...")
+                google_auth.authenticate_account('work')
+            else:
+                print("✅ Work account already authenticated")
+                
+            # Test work account connection
+            if google_auth.test_connection('work'):
+                print("✅ Work Google Drive connection successful")
+                work_info = google_auth.get_account_info('work')
+                if 'email' in work_info:
+                    print(f"   Account: {work_info['email']}")
+            else:
+                print("❌ Work Google Drive connection failed")
+                return 1
+                
+        except GoogleAuthError as e:
+            print(f"❌ Work account setup failed: {e}")
+            return 1
+        
+        # Step 3: Setup Google OAuth for personal account
+        print("\n🏠 Step 3: Setting up Personal Google Account")
+        print("-" * 45)
+        
+        personal_domain = config_manager.personal_domain
+        print(f"Expected personal domain: {personal_domain}")
+        
+        try:
+            if not google_auth.is_authenticated('personal'):
+                print("Setting up personal account authentication...")
+                google_auth.authenticate_account('personal')
+            else:
+                print("✅ Personal account already authenticated")
+                
+            # Test personal account connection
+            if google_auth.test_connection('personal'):
+                print("✅ Personal Google Drive connection successful")
+                personal_info = google_auth.get_account_info('personal')
+                if 'email' in personal_info:
+                    print(f"   Account: {personal_info['email']}")
+            else:
+                print("❌ Personal Google Drive connection failed")
+                return 1
+                
+        except GoogleAuthError as e:
+            print(f"❌ Personal account setup failed: {e}")
+            return 1
+        
+        # Step 4: Final validation
+        print("\n✅ Step 4: Setup Complete!")
+        print("-" * 25)
+        print("All services are now authenticated and ready.")
+        print("You can now run: para-auditor")
+        
         return 0
         
     except ConfigError as e:
@@ -173,14 +279,36 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
         config_manager.load_config()
         logger.info("Configuration loaded successfully")
         
+        # Initialize authenticators for status checking
+        google_auth = GoogleAuthenticator(config_manager)
+        todoist_auth = TodoistAuthenticator(config_manager)
+        
+        # Check authentication status
+        print("🔐 Authentication Status:")
+        print("-" * 25)
+        
+        # Todoist status
+        todoist_valid = todoist_auth.test_connection()
+        print(f"  • Todoist API: {'✅ Connected' if todoist_valid else '❌ Not connected'}")
+        
+        # Google Drive status
+        work_auth = google_auth.is_authenticated('work')
+        personal_auth = google_auth.is_authenticated('personal')
+        print(f"  • Work Google Drive: {'✅ Authenticated' if work_auth else '❌ Not authenticated'}")
+        print(f"  • Personal Google Drive: {'✅ Authenticated' if personal_auth else '❌ Not authenticated'}")
+        
+        if not (todoist_valid and work_auth and personal_auth):
+            print("\n⚠️  Some services are not properly authenticated.")
+            print("💡 Run 'para-auditor --setup' to configure authentication")
+            return 1
+        
         # TODO: Implement audit logic here
         # This will be implemented in Phase 3-5
-        print("⚠️  Audit functionality not yet implemented.")
+        print("\n⚠️  Audit functionality not yet implemented.")
         print("This will be available in Phase 3-5 of development.")
         
         # Show what would be audited
         print("\n📊 Audit Configuration:")
-        print(f"  • Todoist API: {'✅ Configured' if config_manager.todoist_token else '❌ Not configured'}")
         print(f"  • Work Domain: {config_manager.work_domain}")
         print(f"  • Personal Domain: {config_manager.personal_domain}")
         print(f"  • Projects Folder: {config_manager.projects_folder}")
