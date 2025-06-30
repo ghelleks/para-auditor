@@ -1,0 +1,28 @@
+# PARA Auditor Configuration File
+# Copy this file to config.yaml and fill in your actual values
+
+todoist:
+  # Get your API token from Todoist Settings → Integrations → Developer
+  api_token: "your_todoist_token_here"
+
+google_drive:
+  # Your work and personal account domains (must start with @)
+  work_account_domain: "@yourcompany.com"
+  personal_account_domain: "@gmail.com"
+  
+  # Google Drive API scopes (don't change unless you know what you're doing)
+  scopes:
+    - "https://www.googleapis.com/auth/drive.readonly"
+    - "https://www.googleapis.com/auth/drive.metadata.readonly"
+
+apple_notes:
+  # Folder names in Apple Notes (change if you use different names)
+  projects_folder: "Projects"
+  areas_folder: "Areas"
+
+audit_settings:
+  # Similarity threshold for name matching (0.0 = exact match, 1.0 = any match)
+  similarity_threshold: 0.8
+  
+  # Report output format: markdown, json, or text
+  report_format: "markdown"

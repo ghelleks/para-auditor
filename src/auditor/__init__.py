@@ -1,0 +1,1 @@
+"""Core auditing logic and report generation."""
