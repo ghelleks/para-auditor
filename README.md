@@ -2,21 +2,15 @@
 
 A Python tool for auditing consistency of PARA method organization across multiple productivity tools (Todoist, Apple Notes, Google Drive).
 
-## Phase 1 - Foundation (COMPLETED)
+## Features
 
-✅ **Project Structure**: Complete directory structure with proper Python packaging  
-✅ **Configuration System**: YAML-based configuration with validation and environment variable support  
-✅ **Data Models**: PARAItem dataclass with full validation and utility methods  
-✅ **CLI Framework**: Complete command-line interface with comprehensive options  
-✅ **Package Setup**: Installation scripts, dependencies, and virtual environment support  
-
-## Phase 2 - Authentication (COMPLETED)
-
-✅ **Google OAuth**: Desktop application OAuth flow with multiple account support  
-✅ **Todoist Authentication**: API token validation and connection testing  
-✅ **Setup Command**: Interactive setup mode with step-by-step authentication  
-✅ **Token Management**: Secure credential storage and automatic refresh  
-✅ **Domain Validation**: Work vs personal account identification and validation  
+- **Multi-Platform Integration**: Connects to Todoist, Google Drive, and Apple Notes
+- **PARA Method Support**: Identifies Projects (active) and Areas (inactive) across tools
+- **Intelligent Matching**: Advanced fuzzy string matching with normalization
+- **Inconsistency Detection**: 9 types of issues including missing items, status mismatches, and account placement errors
+- **Emoji Analysis**: Detects and suggests appropriate emojis with extensive keyword mappings
+- **Work/Personal Classification**: Automatically categorizes items and validates account placement
+- **Multiple Usage Options**: Direct script, pip installation, or Python module execution
 
 ## Quick Start
 
@@ -44,7 +38,7 @@ pip install -r requirements.txt
 # Run setup to authenticate with all services
 ./para-auditor --setup
 
-# Run audit
+# Run full audit
 ./para-auditor
 ```
 
@@ -59,16 +53,9 @@ para-auditor --setup
 para-auditor
 ```
 
-**Option 3: Python module (legacy)**
-```bash
-python -m src.main --help
-```
-
 ### CLI Options
 
 ```bash
-./para-auditor --help
-# or
 para-auditor --help
 ```
 
@@ -127,14 +114,9 @@ audit_settings:
   report_format: "markdown"
 ```
 
-## Development Status
+## Current Status
 
-- **Phase 1** ✅ Foundation (Complete)
-- **Phase 2** ✅ Authentication (Complete)
-- **Phase 3** ✅ Data Collection (Complete) 
-- **Phase 4** ✅ Comparison Logic (Complete)
-- **Phase 5** ⏳ Reporting (Not started)
-- **Phase 6** ⏳ Testing & Polish (Not started)
+PARA Auditor is currently in active development. Core data collection and comparison logic are implemented. The reporting system is the next major component to be completed.
 
 ## System Requirements
 
@@ -162,8 +144,7 @@ audit_settings:
 ```bash
 # 1. Configure your tokens in config.yaml
 # 2. Run interactive setup
-./para-auditor --setup
-# or: para-auditor --setup (if installed)
+para-auditor --setup
 
 # This will:
 # - Validate Todoist connection
@@ -172,11 +153,11 @@ audit_settings:
 # - Test all connections
 ```
 
-## Next Steps
+## Contributing
 
-To continue development:
+This project is in active development. Key areas for contribution include:
 
-1. **Phase 3**: Add connectors for all three services (Todoist API, Google Drive API, AppleScript)
-2. **Phase 4**: Implement comparison logic and inconsistency detection
-3. **Phase 5**: Build comprehensive reporting system
-4. **Phase 6**: Add tests and polish the user experience
+- Report generation and formatting
+- Additional test coverage
+- Documentation improvements
+- Additional productivity tool integrations
