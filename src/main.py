@@ -4,7 +4,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 
 from .config_manager import ConfigManager, ConfigError
 from .auth.google_auth import GoogleAuthenticator, GoogleAuthError
@@ -14,12 +14,12 @@ from .connectors.gdrive_connector import GDriveConnector
 from .connectors.apple_notes_connector import AppleNotesConnector
 from .auditor.comparator import ItemComparator
 from .auditor.report_generator import ReportGenerator
-from .models.para_item import PARAItem, ItemType, CategoryType
+from .models.para_item import PARAItem, ItemType, CategoryType, ItemSource
 
 
 def setup_logging(verbose: bool = False) -> None:
     """Set up logging configuration."""
-    log_level = logging.DEBUG if verbose else logging.INFO
+    log_level = logging.DEBUG if verbose else logging.WARNING
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     
     logging.basicConfig(
@@ -35,6 +35,16 @@ def setup_logging(verbose: bool = False) -> None:
     logging.getLogger('googleapiclient').setLevel(logging.WARNING)
     logging.getLogger('google_auth_httplib2').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
+    
+    # Set our own module loggers to WARNING unless verbose
+    if not verbose:
+        logging.getLogger('__main__').setLevel(logging.WARNING)
+        logging.getLogger('src.auth.todoist_auth').setLevel(logging.WARNING)
+        logging.getLogger('src.auth.google_auth').setLevel(logging.WARNING)
+        logging.getLogger('src.connectors.todoist_connector').setLevel(logging.WARNING)
+        logging.getLogger('src.connectors.gdrive_connector').setLevel(logging.WARNING)
+        logging.getLogger('src.connectors.apple_notes_connector').setLevel(logging.WARNING)
+        logging.getLogger('src.auditor.comparator').setLevel(logging.WARNING)
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -127,7 +137,7 @@ Examples:
     parser.add_argument(
         '--verbose', '-v',
         action='store_true',
-        help='Enable verbose logging'
+        help='Enable verbose logging and detailed output with full report and statistics'
     )
     parser.add_argument(
         '--dry-run',
@@ -328,11 +338,7 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
             # Collect from Todoist
             if not args.dry_run:
                 print("  • Fetching Todoist projects...")
-                todoist_connector = TodoistConnector(
-                    config_manager.todoist_token,
-                    work_domains=[config_manager.work_domain],
-                    personal_domains=[config_manager.personal_domain]
-                )
+                todoist_connector = TodoistConnector(config_manager.todoist_token)
                 todoist_items = todoist_connector.get_projects()
                 all_items.extend(todoist_items)
                 print(f"    Found {len(todoist_items)} Todoist projects")
@@ -342,7 +348,7 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
                 print("  • Fetching work Google Drive folders...")
                 work_credentials = google_auth.get_credentials('work')
                 work_connector = GDriveConnector(work_credentials, 'work')
-                work_items = work_connector.get_para_folders()
+                work_items = work_connector.get_para_folders(config_manager.gdrive_base_folder_name)
                 all_items.extend(work_items)
                 print(f"    Found {len(work_items)} work folders")
             
@@ -351,7 +357,7 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
                 print("  • Fetching personal Google Drive folders...")
                 personal_credentials = google_auth.get_credentials('personal')
                 personal_connector = GDriveConnector(personal_credentials, 'personal')
-                personal_items = personal_connector.get_para_folders()
+                personal_items = personal_connector.get_para_folders(config_manager.gdrive_base_folder_name)
                 all_items.extend(personal_items)
                 print(f"    Found {len(personal_items)} personal folders")
             
@@ -408,12 +414,16 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
             # Print to console if no output file specified
             if not args.output:
                 print("\n" + "="*60)
-                print(report_content)
+                if args.verbose:
+                    print(report_content)
+                else:
+                    print_project_alignment_view(filtered_items, comparison_result)
             else:
                 print(f"\n✅ Report saved to: {args.output}")
             
-            # Print summary
-            print_audit_summary(comparison_result)
+            # Print summary only if verbose
+            if args.verbose:
+                print_audit_summary(comparison_result)
             
             return 0
             
@@ -471,6 +481,92 @@ def print_audit_configuration(config_manager: ConfigManager, args: argparse.Name
         print("  • Filter: Projects only")
     elif args.areas_only:
         print("  • Filter: Areas only")
+
+
+def print_project_alignment_view(all_items: List[PARAItem], comparison_result) -> None:
+    """Print project-by-project alignment view."""
+    # Get all Todoist projects as the primary source
+    todoist_items = [item for item in all_items if item.source == ItemSource.TODOIST]
+    
+    if not todoist_items:
+        print("No Todoist projects found to display alignment for.")
+        return
+    
+    print("📋 PROJECT ALIGNMENT OVERVIEW")
+    print("=" * 40)
+    print()
+    
+    for todoist_item in sorted(todoist_items, key=lambda x: x.name.lower()):
+        # Find matching items in other sources
+        matching_items = find_matching_items_for_project(todoist_item, all_items, comparison_result)
+        
+        # Display project info
+        status_emoji = "✅" if todoist_item.is_active else "⭕"
+        category_emoji = "🏢" if todoist_item.category == CategoryType.WORK else "🏠"
+        
+        print(f"{status_emoji} {category_emoji} {todoist_item.raw_name or todoist_item.name}")
+        
+        # Get all unique issues for this project
+        all_issues = get_project_issues(todoist_item, matching_items, comparison_result)
+        
+        if all_issues:
+            for issue in all_issues:
+                print(f"  • {issue}")
+        else:
+            print("  ✅ All systems aligned")
+        
+        print()  # Empty line between projects
+
+
+def find_matching_items_for_project(todoist_item: PARAItem, all_items: List[PARAItem], comparison_result) -> Dict[ItemSource, List[PARAItem]]:
+    """Find matching items for a Todoist project across all sources."""
+    matching_items = {source: [] for source in ItemSource}
+    
+    # Look through item groups to find matches
+    for group in comparison_result.item_groups:
+        if todoist_item in group:
+            for item in group:
+                if item.source != ItemSource.TODOIST:
+                    matching_items[item.source].append(item)
+            break
+    
+    return matching_items
+
+
+def get_project_issues(todoist_item: PARAItem, matching_items: Dict[ItemSource, List[PARAItem]], comparison_result) -> List[str]:
+    """Get all unique issues for a specific Todoist project."""
+    issues = set()  # Use set to avoid duplicates
+    
+    # Determine which sources to check based on project category
+    if todoist_item.category == CategoryType.WORK:
+        expected_sources = [ItemSource.GDRIVE_WORK, ItemSource.APPLE_NOTES]
+    else:  # Personal project
+        expected_sources = [ItemSource.GDRIVE_PERSONAL, ItemSource.APPLE_NOTES]
+    
+    # Check for missing folders
+    for source in expected_sources:
+        matches = matching_items.get(source, [])
+        if not matches:
+            source_name = "Work Google Drive" if source == ItemSource.GDRIVE_WORK else \
+                         "Personal Google Drive" if source == ItemSource.GDRIVE_PERSONAL else \
+                         "Apple Notes"
+            issues.add(f"❌ Missing in {source_name}: Create folder '{todoist_item.name}'")
+    
+    # Check for inconsistencies involving this project
+    seen_descriptions = set()  # Track unique issue descriptions
+    for inconsistency in comparison_result.inconsistencies:
+        if todoist_item in inconsistency.items:
+            # Only include if it affects our expected sources
+            sources_in_inconsistency = {item.source for item in inconsistency.items}
+            if any(source in expected_sources for source in sources_in_inconsistency):
+                # Clean up the description and make it more actionable
+                description = inconsistency.description
+                if description not in seen_descriptions:
+                    seen_descriptions.add(description)
+                    issue_type = inconsistency.type.value.replace('_', ' ').title()
+                    issues.add(f"⚠️  {issue_type}: {description}")
+    
+    return sorted(list(issues))  # Sort for consistent output
 
 
 def print_audit_summary(result) -> None:

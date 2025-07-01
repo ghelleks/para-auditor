@@ -3,16 +3,20 @@
 
 todoist:
   # Get your API token from Todoist Settings → Integrations → Developer
+  # Work projects should start with 💼 emoji, personal projects without
   api_token: "your_todoist_token_here"
 
 google_drive:
-  # Your work and personal account domains (must start with @)
+  # Your work and personal account domains (for Google Drive folder organization)
   work_account_domain: "@yourcompany.com"
   personal_account_domain: "@gmail.com"
   
   # Google OAuth client secrets files (download from Google Cloud Console)
   work_client_secrets: "config/credentials/work_client_secrets.json"
   personal_client_secrets: "config/credentials/personal_client_secrets.json"
+  
+  # Base folder name containing your PARA projects/areas (customize if different)
+  base_folder_name: "@2-Areas"
   
   # Google Drive API scopes (don't change unless you know what you're doing)
   scopes:

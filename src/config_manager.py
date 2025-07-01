@@ -205,6 +205,11 @@ class ConfigManager:
         return self.get("google_drive.personal_client_secrets", "config/credentials/personal_client_secrets.json")
     
     @property
+    def gdrive_base_folder_name(self) -> str:
+        """Get Google Drive base folder name."""
+        return self.get("google_drive.base_folder_name", "@2-Areas")
+    
+    @property
     def projects_folder(self) -> str:
         """Get Apple Notes projects folder name."""
         return self.get("apple_notes.projects_folder", "Projects")

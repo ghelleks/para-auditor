@@ -18,7 +18,6 @@ class InconsistencyType(Enum):
     TYPE_MISMATCH = "type_mismatch"
     CATEGORY_MISMATCH = "category_mismatch"
     WRONG_ACCOUNT = "wrong_account"
-    MISSING_LINK = "missing_link"
     DUPLICATE_ITEM = "duplicate_item"
     NAME_VARIATION = "name_variation"
     MISSING_EMOJI = "missing_emoji"
@@ -99,6 +98,9 @@ class ItemComparator:
         # Group items by similarity
         item_groups = self._group_similar_items(items)
         
+        # Propagate categories from Todoist to matching items
+        self._propagate_categories_from_todoist(item_groups)
+        
         # Find orphaned items (no matches across tools)
         orphaned_items = self._find_orphaned_items(item_groups)
         
@@ -163,6 +165,30 @@ class ItemComparator:
         
         return groups
     
+    def _propagate_categories_from_todoist(self, item_groups: List[List[PARAItem]]) -> None:
+        """Propagate work/personal categories from Todoist items to their matching items.
+        
+        Todoist projects with 💼 prefix are authoritative for work/personal classification.
+        This method updates Apple Notes and Google Drive items to match Todoist category.
+        
+        Args:
+            item_groups: List of grouped similar items
+        """
+        for group in item_groups:
+            # Find Todoist item in this group (if any)
+            todoist_item = None
+            for item in group:
+                if item.source == ItemSource.TODOIST:
+                    todoist_item = item
+                    break
+            
+            # If we have a Todoist item, propagate its category to other items
+            if todoist_item:
+                for item in group:
+                    if item.source != ItemSource.TODOIST:
+                        # Update the category to match Todoist
+                        item.category = todoist_item.category
+    
     def _find_orphaned_items(self, item_groups: List[List[PARAItem]]) -> List[PARAItem]:
         """Find items that don't have matches in other tools.
         
@@ -213,8 +239,6 @@ class ItemComparator:
         # Check for account placement issues
         inconsistencies.extend(self._check_account_placement(group))
         
-        # Check for missing links
-        inconsistencies.extend(self._check_missing_links(group))
         
         # Check for name variations
         inconsistencies.extend(self._check_name_variations(group))
@@ -363,37 +387,6 @@ class ItemComparator:
         
         return inconsistencies
     
-    def _check_missing_links(self, group: List[PARAItem]) -> List[Inconsistency]:
-        """Check for missing Google Drive links in Todoist.
-        
-        Args:
-            group: Group of similar items
-            
-        Returns:
-            List of missing link inconsistencies
-        """
-        inconsistencies = []
-        
-        todoist_items = [item for item in group if item.source == ItemSource.TODOIST]
-        gdrive_items = [item for item in group if item.source in [ItemSource.GDRIVE_WORK, ItemSource.GDRIVE_PERSONAL]]
-        
-        for todoist_item in todoist_items:
-            gdrive_links = todoist_item.metadata.get('gdrive_links', [])
-            
-            if gdrive_items and not gdrive_links:
-                # Todoist item exists but has no Google Drive links
-                inconsistencies.append(Inconsistency(
-                    type=InconsistencyType.MISSING_LINK,
-                    description=f"'{todoist_item.name}' in Todoist has no Google Drive links but folders exist",
-                    severity='medium',
-                    items=[todoist_item] + gdrive_items,
-                    suggested_action="Add Google Drive folder links to Todoist project tasks",
-                    metadata={
-                        'missing_links': [item.metadata.get('web_view_link') for item in gdrive_items if item.metadata.get('web_view_link')]
-                    }
-                ))
-        
-        return inconsistencies
     
     def _check_name_variations(self, group: List[PARAItem]) -> List[Inconsistency]:
         """Check for name variations within a group.

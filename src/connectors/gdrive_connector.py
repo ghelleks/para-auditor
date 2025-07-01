@@ -40,7 +40,7 @@ class GDriveConnector:
             logger.error(f"Failed to initialize Google Drive service: {e}")
             raise
     
-    def get_para_folders(self, base_folder_name: str = '2-@Area') -> List[PARAItem]:
+    def get_para_folders(self, base_folder_name: str = '@2-Areas') -> List[PARAItem]:
         """Fetch PARA method folders from Google Drive.
         
         Args:
@@ -51,10 +51,15 @@ class GDriveConnector:
         """
         try:
             # First, find the base folder
+            logger.debug(f"Searching for base folder '{base_folder_name}' in {self.account_type} Google Drive")
             base_folder = self._find_folder_by_name(base_folder_name)
             if not base_folder:
                 logger.warning(f"Base folder '{base_folder_name}' not found in {self.account_type} Google Drive")
+                logger.info(f"Tip: Make sure the folder '{base_folder_name}' exists in your Google Drive")
+                logger.info(f"You can customize the folder name in config.yaml under google_drive.base_folder_name")
                 return []
+            
+            logger.info(f"Found base folder '{base_folder_name}' (ID: {base_folder['id']}) in {self.account_type} Google Drive")
             
             # Get all folders within the base folder
             folders = self._get_folders_in_directory(base_folder['id'])

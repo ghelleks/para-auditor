@@ -59,14 +59,11 @@ class AppleNotesConnector:
             # Process Projects folders (active items)
             if 'projects' in folder_data:
                 for folder_name in folder_data['projects']:
-                    category_str = self._classify_folder_category(folder_name)
-                    category = CategoryType.WORK if category_str == 'work' else CategoryType.PERSONAL if category_str == 'personal' else CategoryType.PERSONAL
-                    
                     para_item = PARAItem(
                         name=folder_name,
                         type=ItemType.PROJECT,
                         is_active=True,
-                        category=category,
+                        category=CategoryType.PERSONAL,  # Default, will be corrected during comparison
                         source=ItemSource.APPLE_NOTES,
                         metadata={
                             'parent_folder': 'Projects',
@@ -78,14 +75,11 @@ class AppleNotesConnector:
             # Process Areas folders (inactive items)
             if 'areas' in folder_data:
                 for folder_name in folder_data['areas']:
-                    category_str = self._classify_folder_category(folder_name)
-                    category = CategoryType.WORK if category_str == 'work' else CategoryType.PERSONAL if category_str == 'personal' else CategoryType.PERSONAL
-                    
                     para_item = PARAItem(
                         name=folder_name,
                         type=ItemType.AREA,
                         is_active=False,
-                        category=category,
+                        category=CategoryType.PERSONAL,  # Default, will be corrected during comparison
                         source=ItemSource.APPLE_NOTES,
                         metadata={
                             'parent_folder': 'Areas',
@@ -141,43 +135,6 @@ class AppleNotesConnector:
             logger.error(f"Error executing AppleScript: {e}")
             return None
     
-    def _classify_folder_category(self, folder_name: str) -> str:
-        """Classify folder as work or personal based on name patterns.
-        
-        Args:
-            folder_name: Name of the folder
-            
-        Returns:
-            'work', 'personal', or 'unknown'
-        """
-        folder_lower = folder_name.lower()
-        
-        # Work-related keywords
-        work_keywords = [
-            'work', 'job', 'office', 'business', 'company', 'corporate',
-            'client', 'project', 'meeting', 'team', 'department', 
-            'professional', 'career', 'admin', 'hr', 'finance'
-        ]
-        
-        # Personal-related keywords
-        personal_keywords = [
-            'personal', 'home', 'family', 'hobby', 'health', 'fitness',
-            'travel', 'vacation', 'friends', 'social', 'entertainment',
-            'learning', 'education', 'creative', 'art', 'music'
-        ]
-        
-        # Check for work keywords
-        for keyword in work_keywords:
-            if keyword in folder_lower:
-                return 'work'
-        
-        # Check for personal keywords
-        for keyword in personal_keywords:
-            if keyword in folder_lower:
-                return 'personal'
-        
-        # Default to unknown if no patterns match
-        return 'unknown'
     
     def test_connection(self) -> bool:
         """Test connection to Apple Notes.

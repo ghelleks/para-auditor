@@ -196,6 +196,20 @@ class GoogleAuthenticator:
             logger.warning(f"Could not validate account domain: {e}")
             # Continue anyway - domain validation is not critical
     
+    def get_credentials(self, account_type: str) -> Credentials:
+        """Get credentials for the specified account type.
+        
+        Args:
+            account_type: Either 'work' or 'personal'
+            
+        Returns:
+            Google OAuth credentials
+            
+        Raises:
+            GoogleAuthError: If authentication fails
+        """
+        return self.authenticate_account(account_type)
+
     def get_drive_service(self, account_type: str):
         """Get an authenticated Google Drive service."""
         creds = self.authenticate_account(account_type)

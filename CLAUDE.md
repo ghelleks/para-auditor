@@ -66,7 +66,8 @@ python -m pytest tests/
 - **Inactive (Area)**: Not favorited in Todoist, Not starred in Google Drive, In Apple Notes "Areas" folder
 
 ### Work/Personal Detection
-- Google Drive links in Todoist tasks determine work vs personal classification
+- **Work projects**: Those starting with 💼 emoji in their name
+- **Personal projects**: All other projects (default)
 - Work items → work Google Drive account only
 - Personal items → personal Google Drive account only
 
@@ -91,8 +92,9 @@ python -m pytest tests/
 - Supports multiple account authentication
 
 ### Todoist API  
-- Extracts Google Drive links from task content using regex patterns
-- Parses various Google Drive URL formats to determine account type
+- Processes only favorited projects (active projects in PARA method)
+- Classifies work vs personal based on 💼 emoji prefix in project names
+- Extracts Google Drive links from task content for folder linking
 
 ### Apple Notes AppleScript
 - Uses custom AppleScript to extract folder structures

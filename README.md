@@ -107,6 +107,7 @@ google_drive:
   personal_account_domain: "@gmail.com"
   work_client_secrets: "config/credentials/work_client_secrets.json"
   personal_client_secrets: "config/credentials/personal_client_secrets.json"
+  base_folder_name: "@2-Areas"
   scopes:
     - "https://www.googleapis.com/auth/drive.readonly"
     - "https://www.googleapis.com/auth/drive.metadata.readonly"

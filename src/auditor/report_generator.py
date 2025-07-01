@@ -311,7 +311,6 @@ class MarkdownFormatter(ReportFormatter):
             InconsistencyType.TYPE_MISMATCH: '🏷️',
             InconsistencyType.CATEGORY_MISMATCH: '📊',
             InconsistencyType.WRONG_ACCOUNT: '👤',
-            InconsistencyType.MISSING_LINK: '🔗',
             InconsistencyType.DUPLICATE_ITEM: '👥',
             InconsistencyType.NAME_VARIATION: '📝',
             InconsistencyType.MISSING_EMOJI: '😐'
