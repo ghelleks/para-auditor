@@ -199,14 +199,22 @@ def handle_setup_mode(config_manager: ConfigManager) -> int:
         work_domain = config_manager.work_domain
         print(f"Expected work domain: {work_domain}")
         
-        if not Path("config/client_secrets.json").exists():
-            print("❌ Google OAuth client secrets file not found")
-            print("\nTo set up Google Drive access:")
+        work_secrets_path = Path(config_manager.work_client_secrets_path)
+        personal_secrets_path = Path(config_manager.personal_client_secrets_path)
+        
+        if not work_secrets_path.exists() or not personal_secrets_path.exists():
+            print("❌ Google OAuth client secrets files not found")
+            print("\nTo set up Google Drive access, you need OAuth credentials for work and personal accounts:")
             print("1. Go to Google Cloud Console: https://console.cloud.google.com/")
             print("2. Create a new project or select existing")
             print("3. Enable Google Drive API")
             print("4. Create OAuth 2.0 credentials (Desktop application)")
-            print("5. Download as 'client_secrets.json' and place in config/ directory")
+            print("5. Download the credentials and save as:")
+            print(f"   • Work account: {work_secrets_path}")
+            print(f"   • Personal account: {personal_secrets_path}")
+            print("\nNote: You can use the same OAuth credentials for both accounts")
+            print("      if they're from the same Google Cloud project.")
+            print(f"\nTip: You can customize these paths in config/config.yaml")
             return 1
         
         try:

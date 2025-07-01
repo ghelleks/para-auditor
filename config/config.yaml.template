@@ -10,6 +10,10 @@ google_drive:
   work_account_domain: "@yourcompany.com"
   personal_account_domain: "@gmail.com"
   
+  # Google OAuth client secrets files (download from Google Cloud Console)
+  work_client_secrets: "config/credentials/work_client_secrets.json"
+  personal_client_secrets: "config/credentials/personal_client_secrets.json"
+  
   # Google Drive API scopes (don't change unless you know what you're doing)
   scopes:
     - "https://www.googleapis.com/auth/drive.readonly"

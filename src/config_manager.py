@@ -195,6 +195,16 @@ class ConfigManager:
         return self.get("google_drive.scopes", [])
     
     @property
+    def work_client_secrets_path(self) -> str:
+        """Get work account client secrets file path."""
+        return self.get("google_drive.work_client_secrets", "config/credentials/work_client_secrets.json")
+    
+    @property
+    def personal_client_secrets_path(self) -> str:
+        """Get personal account client secrets file path."""
+        return self.get("google_drive.personal_client_secrets", "config/credentials/personal_client_secrets.json")
+    
+    @property
     def projects_folder(self) -> str:
         """Get Apple Notes projects folder name."""
         return self.get("apple_notes.projects_folder", "Projects")

@@ -29,7 +29,12 @@ class GoogleAuthenticator:
         self.config_manager = config_manager
         self.scopes = config_manager.google_scopes
         self.credentials_dir = Path("config/credentials")
-        self.client_secrets_path = Path("config/client_secrets.json")
+        
+        # Account-specific client secrets files from configuration
+        self.client_secrets_paths = {
+            'work': Path(config_manager.work_client_secrets_path),
+            'personal': Path(config_manager.personal_client_secrets_path)
+        }
         
         # Ensure credentials directory exists
         self.credentials_dir.mkdir(parents=True, exist_ok=True)
@@ -103,16 +108,19 @@ class GoogleAuthenticator:
     
     def _perform_oauth_flow(self, account_type: str) -> Credentials:
         """Perform OAuth flow for the specified account type."""
-        if not self.client_secrets_path.exists():
+        client_secrets_path = self.client_secrets_paths[account_type]
+        
+        if not client_secrets_path.exists():
             raise GoogleAuthError(
-                f"Client secrets file not found at {self.client_secrets_path}. "
-                "Please download it from Google Cloud Console and place it in the config directory."
+                f"Client secrets file not found at {client_secrets_path}. "
+                f"Please download the {account_type} account client secrets from Google Cloud Console "
+                f"and save it as {client_secrets_path.name} in the config/credentials/ directory."
             )
         
         try:
             # Create flow from client secrets
             flow = InstalledAppFlow.from_client_secrets_file(
-                str(self.client_secrets_path), 
+                str(client_secrets_path), 
                 self.scopes
             )
             

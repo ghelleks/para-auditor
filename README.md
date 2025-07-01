@@ -74,7 +74,11 @@ para_auditor/
 ├── config/                       # Configuration files
 │   ├── config.yaml               # Main configuration (created by user)
 │   ├── config.yaml.template      # Template configuration
-│   └── credentials/              # OAuth tokens (auto-generated)
+│   └── credentials/              # OAuth credentials and tokens
+│       ├── work_client_secrets.json      # Work Google OAuth credentials (user provides)
+│       ├── personal_client_secrets.json  # Personal Google OAuth credentials (user provides)
+│       ├── work_drive_token.pickle       # Work Google Drive tokens (auto-generated)
+│       └── personal_drive_token.pickle   # Personal Google Drive tokens (auto-generated)
 ├── src/                          # Source code
 │   ├── main.py                   # CLI entry point
 │   ├── config_manager.py         # Configuration handling
@@ -101,6 +105,8 @@ todoist:
 google_drive:
   work_account_domain: "@yourcompany.com"
   personal_account_domain: "@gmail.com"
+  work_client_secrets: "config/credentials/work_client_secrets.json"
+  personal_client_secrets: "config/credentials/personal_client_secrets.json"
   scopes:
     - "https://www.googleapis.com/auth/drive.readonly"
     - "https://www.googleapis.com/auth/drive.metadata.readonly"
@@ -137,7 +143,11 @@ PARA Auditor is currently in active development. Core data collection and compar
    - Create project at [Google Cloud Console](https://console.cloud.google.com/)
    - Enable Google Drive API
    - Create OAuth 2.0 credentials (Desktop application)
-   - Download as `client_secrets.json` and place in `config/` directory
+   - Download the credentials file and save as the paths specified in your `config/config.yaml`:
+     - Default: `config/credentials/work_client_secrets.json` (for work Google account)
+     - Default: `config/credentials/personal_client_secrets.json` (for personal Google account)
+   - **Note**: You can use the same credentials file for both accounts if they're from the same Google Cloud project
+   - **Tip**: File paths can be customized in the `google_drive` section of your config file
 
 ### Setup Process
 
