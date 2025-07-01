@@ -1,103 +1,82 @@
 # PARA Auditor
 
-A Python tool for auditing consistency of PARA method organization across multiple productivity tools (Todoist, Apple Notes, Google Drive).
+Keep your PARA method organization consistent across Todoist, Google Drive, and Apple Notes.
 
-## Features
+## What It Does
 
-- **Multi-Platform Integration**: Connects to Todoist, Google Drive, and Apple Notes
-- **PARA Method Support**: Identifies Projects (active) and Areas (inactive) across tools
-- **Intelligent Matching**: Advanced fuzzy string matching with normalization
-- **Inconsistency Detection**: 9 types of issues including missing items, status mismatches, and account placement errors
-- **Emoji Analysis**: Detects and suggests appropriate emojis with extensive keyword mappings
-- **Work/Personal Classification**: Automatically categorizes items and validates account placement
-- **Multiple Usage Options**: Direct script, pip installation, or Python module execution
+PARA Auditor checks that your projects and areas are properly aligned across your productivity tools. It identifies missing folders, status inconsistencies, and naming variations so you can maintain a clean, organized PARA system.
+
+**Key Features:**
+- **Work/Personal Classification**: Use 💼 emoji prefix in Todoist for work projects  
+- **Cross-Platform Sync**: Audits Todoist, Google Drive (work & personal), and Apple Notes
+- **Smart Matching**: Finds similar items even with slight name variations
+- **Category-Specific Checking**: Work projects only check work accounts, personal projects only check personal accounts
 
 ## Quick Start
 
-### Installation
-
+### 1. Install Dependencies
 ```bash
-# Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Basic Usage
-
-**Option 1: Direct script (no installation required)**
+### 2. Setup Configuration
 ```bash
-# Create default configuration
+# Create default config file
 ./para-auditor --create-config
 
-# Edit the configuration file with your API tokens
-# config/config.yaml
+# Edit config/config.yaml with your API tokens
+# - Add Todoist API token
+# - Set your work/personal email domains  
+# - Configure Google OAuth credentials
+```
 
-# Run setup to authenticate with all services
+### 3. Authenticate Services
+```bash
+# Interactive setup for all services
 ./para-auditor --setup
+```
 
+### 4. Run Audit
+```bash
 # Run full audit
 ./para-auditor
+
+# Or with detailed output
+./para-auditor --verbose
 ```
 
-**Option 2: Install as package**
-```bash
-# Install in development mode
-pip install -e .
+## How It Works
 
-# Now you can use para-auditor from anywhere
-para-auditor --create-config
-para-auditor --setup
-para-auditor
-```
+1. **Todoist**: Processes favorited projects. Work projects start with 💼 emoji.
+2. **Google Drive**: Scans your `@2-Areas` folder in both work and personal accounts
+3. **Apple Notes**: Checks `Projects` and `Areas` folders
+4. **Analysis**: Matches items by name and reports inconsistencies
 
-### CLI Options
-
-```bash
-para-auditor --help
-```
-
-Key options:
-- `--setup`: Initialize OAuth flows and configuration
-- `--create-config`: Generate default configuration file
-- `--format {markdown,json,text}`: Report output format
-- `--work-only` / `--personal-only`: Filter by category
-- `--projects-only` / `--areas-only`: Filter by type
-- `--verbose`: Enable debug logging
-
-## Project Structure
+## Example Output
 
 ```
-para_auditor/
-├── config/                       # Configuration files
-│   ├── config.yaml               # Main configuration (created by user)
-│   ├── config.yaml.template      # Template configuration
-│   └── credentials/              # OAuth credentials and tokens
-│       ├── work_client_secrets.json      # Work Google OAuth credentials (user provides)
-│       ├── personal_client_secrets.json  # Personal Google OAuth credentials (user provides)
-│       ├── work_drive_token.pickle       # Work Google Drive tokens (auto-generated)
-│       └── personal_drive_token.pickle   # Personal Google Drive tokens (auto-generated)
-├── src/                          # Source code
-│   ├── main.py                   # CLI entry point
-│   ├── config_manager.py         # Configuration handling
-│   ├── auth/                     # Authentication modules
-│   ├── connectors/               # API integrations
-│   ├── models/                   # Data models
-│   │   └── para_item.py          # Core PARAItem model
-│   ├── auditor/                  # Audit logic
-│   └── utils/                    # Utilities
-├── tests/                        # Test modules
-├── scripts/applescript/          # AppleScript integration
-├── requirements.txt              # Python dependencies
-└── setup.py                     # Package installation
+📋 PROJECT ALIGNMENT OVERVIEW
+========================================
+
+✅ 🏢 💼RHEL Cloud
+  • ⚠️  Status Mismatch: active in Todoist but inactive in Google Drive
+  • ❌ Missing in Apple Notes: Create folder 'RHEL Cloud'
+
+✅ 🏠 🏝️ Summer 2025
+  ✅ All systems aligned
 ```
+
+## Requirements
+
+- **macOS** (for Apple Notes integration)
+- **Python 3.8+**
+- **API Access**: Todoist API token, Google OAuth credentials
 
 ## Configuration
 
-The tool uses a YAML configuration file at `config/config.yaml`:
-
+Minimal `config/config.yaml`:
 ```yaml
 todoist:
   api_token: "your_todoist_token_here"
@@ -107,68 +86,10 @@ google_drive:
   personal_account_domain: "@gmail.com"
   work_client_secrets: "config/credentials/work_client_secrets.json"
   personal_client_secrets: "config/credentials/personal_client_secrets.json"
-  base_folder_name: "@2-Areas"
-  scopes:
-    - "https://www.googleapis.com/auth/drive.readonly"
-    - "https://www.googleapis.com/auth/drive.metadata.readonly"
 
 apple_notes:
   projects_folder: "Projects"
   areas_folder: "Areas"
-
-audit_settings:
-  similarity_threshold: 0.8
-  report_format: "markdown"
 ```
 
-## Current Status
-
-PARA Auditor is currently in active development. Core data collection and comparison logic are implemented. The reporting system is the next major component to be completed.
-
-## System Requirements
-
-- **macOS** (required for Apple Notes integration)
-- **Python 3.8+**
-- Internet connection for OAuth and API calls
-
-## Authentication Setup
-
-### Prerequisites
-
-1. **Todoist API Token**:
-   - Go to [Todoist Settings → Integrations](https://todoist.com/prefs/integrations)
-   - Copy your API token from the Developer section
-   - Add it to `config/config.yaml`
-
-2. **Google Cloud Setup**:
-   - Create project at [Google Cloud Console](https://console.cloud.google.com/)
-   - Enable Google Drive API
-   - Create OAuth 2.0 credentials (Desktop application)
-   - Download the credentials file and save as the paths specified in your `config/config.yaml`:
-     - Default: `config/credentials/work_client_secrets.json` (for work Google account)
-     - Default: `config/credentials/personal_client_secrets.json` (for personal Google account)
-   - **Note**: You can use the same credentials file for both accounts if they're from the same Google Cloud project
-   - **Tip**: File paths can be customized in the `google_drive` section of your config file
-
-### Setup Process
-
-```bash
-# 1. Configure your tokens in config.yaml
-# 2. Run interactive setup
-para-auditor --setup
-
-# This will:
-# - Validate Todoist connection
-# - Authenticate work Google account
-# - Authenticate personal Google account
-# - Test all connections
-```
-
-## Contributing
-
-This project is in active development. Key areas for contribution include:
-
-- Report generation and formatting
-- Additional test coverage
-- Documentation improvements
-- Additional productivity tool integrations
+Get your Todoist token from [Settings → Integrations](https://todoist.com/prefs/integrations). Set up Google OAuth at [Google Cloud Console](https://console.cloud.google.com/) (enable Drive API, create Desktop OAuth credentials).
