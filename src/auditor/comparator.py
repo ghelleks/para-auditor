@@ -402,8 +402,8 @@ class ItemComparator:
         if len(group) <= 1:
             return inconsistencies
         
-        # Check if names are exactly the same
-        unique_names = set(item.raw_name or item.name for item in group)
+        # Check if names are exactly the same (use clean names for comparison)
+        unique_names = set(item.name for item in group)
         
         if len(unique_names) > 1:
             # Names vary - suggest canonical name
@@ -411,7 +411,7 @@ class ItemComparator:
             
             name_variations = {}
             for item in group:
-                name = item.raw_name or item.name
+                name = item.name  # Use clean name for consistency
                 if name != canonical_name:
                     if name not in name_variations:
                         name_variations[name] = []
