@@ -69,24 +69,51 @@ class GDriveConnector:
                 # Determine if folder is active (starred)
                 is_active = folder.get('starred', False)
                 
+                # Check if this is a shortcut
+                is_shortcut = folder.get('mimeType') == 'application/vnd.google-apps.shortcut'
+                
+                # For shortcuts, we need to get the target information
+                metadata = {
+                    'folder_id': folder['id'],
+                    'parent_id': base_folder['id'],
+                    'web_view_link': folder.get('webViewLink'),
+                    'created_time': folder.get('createdTime'),
+                    'modified_time': folder.get('modifiedTime'),
+                    'account_type': self.account_type,
+                    'is_shortcut': is_shortcut
+                }
+                
+                if is_shortcut:
+                    # Add shortcut-specific metadata
+                    shortcut_details = folder.get('shortcutDetails', {})
+                    metadata.update({
+                        'shortcut_target_id': shortcut_details.get('targetId'),
+                        'shortcut_target_mime_type': shortcut_details.get('targetMimeType'),
+                        'original_folder_name': folder['name']
+                    })
+                    
+                    # Log that we found a shortcut
+                    logger.debug(f"Found shortcut '{folder['name']}' pointing to {shortcut_details.get('targetId', 'unknown target')}")
+                
                 para_item = PARAItem(
                     name=folder['name'],
                     type=ItemType.PROJECT if is_active else ItemType.AREA,
                     is_active=is_active,
                     category=CategoryType.WORK if self.account_type == 'work' else CategoryType.PERSONAL,
                     source=ItemSource.GDRIVE_WORK if self.account_type == 'work' else ItemSource.GDRIVE_PERSONAL,
-                    metadata={
-                        'folder_id': folder['id'],
-                        'parent_id': base_folder['id'],
-                        'web_view_link': folder.get('webViewLink'),
-                        'created_time': folder.get('createdTime'),
-                        'modified_time': folder.get('modifiedTime'),
-                        'account_type': self.account_type
-                    }
+                    metadata=metadata
                 )
                 para_items.append(para_item)
             
-            logger.info(f"Fetched {len(para_items)} folders from {self.account_type} Google Drive")
+            # Count shortcuts vs regular folders for logging
+            shortcut_count = sum(1 for item in para_items if item.metadata.get('is_shortcut', False))
+            folder_count = len(para_items) - shortcut_count
+            
+            if shortcut_count > 0:
+                logger.info(f"Fetched {len(para_items)} items from {self.account_type} Google Drive ({folder_count} folders, {shortcut_count} shortcuts)")
+            else:
+                logger.info(f"Fetched {len(para_items)} folders from {self.account_type} Google Drive")
+            
             return para_items
             
         except Exception as e:
@@ -133,11 +160,12 @@ class GDriveConnector:
             page_token = None
             
             while True:
-                query = f"'{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+                # Include both folders and shortcuts
+                query = f"'{parent_id}' in parents and (mimeType='application/vnd.google-apps.folder' or mimeType='application/vnd.google-apps.shortcut') and trashed=false"
                 
                 results = self.service.files().list(
                     q=query,
-                    fields='nextPageToken, files(id, name, starred, webViewLink, createdTime, modifiedTime, parents)',
+                    fields='nextPageToken, files(id, name, starred, webViewLink, createdTime, modifiedTime, parents, mimeType, shortcutDetails)',
                     pageToken=page_token,
                     pageSize=100  # Handle pagination
                 ).execute()
@@ -255,3 +283,39 @@ class GDriveConnector:
         except HttpError as e:
             logger.error(f"Error starring folder {folder_id}: {e}")
             return False
+    
+    def create_shortcut(self, target_id: str, name: str, parent_id: str = None) -> Optional[str]:
+        """Create a shortcut to a folder in Google Drive.
+        
+        Args:
+            target_id: ID of the target folder to create shortcut to
+            name: Name for the shortcut
+            parent_id: ID of parent folder (optional)
+            
+        Returns:
+            ID of created shortcut or None if failed
+        """
+        try:
+            shortcut_metadata = {
+                'name': name,
+                'mimeType': 'application/vnd.google-apps.shortcut',
+                'shortcutDetails': {
+                    'targetId': target_id
+                }
+            }
+            
+            if parent_id:
+                shortcut_metadata['parents'] = [parent_id]
+            
+            shortcut = self.service.files().create(
+                body=shortcut_metadata,
+                fields='id'
+            ).execute()
+            
+            shortcut_id = shortcut.get('id')
+            logger.info(f"Created shortcut '{name}' with ID {shortcut_id} pointing to {target_id}")
+            return shortcut_id
+            
+        except HttpError as e:
+            logger.error(f"Error creating shortcut '{name}': {e}")
+            return None
