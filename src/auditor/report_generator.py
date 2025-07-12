@@ -66,30 +66,20 @@ class MarkdownFormatter(ReportFormatter):
         return ".md"
     
     def format(self, result: ComparisonResult, metadata: ReportMetadata) -> str:
-        """Format as Markdown report."""
+        """Format the comparison result as markdown."""
         lines = []
         
         # Header
         lines.extend(self._format_header(metadata))
         lines.append("")
         
-        # Executive Summary
+        # Summary
         lines.extend(self._format_summary(result, metadata))
         lines.append("")
         
-        # Detailed Findings
-        if result.inconsistencies:
-            lines.extend(self._format_inconsistencies(result.inconsistencies))
-            lines.append("")
-        
-        # Statistics
-        lines.extend(self._format_statistics(result, metadata))
+        # Project Overview (new project-centric format)
+        lines.extend(self._format_projects_overview(result))
         lines.append("")
-        
-        # Item Groups (if detailed)
-        if self.detailed_items:
-            lines.extend(self._format_item_groups(result.item_groups))
-            lines.append("")
         
         # Recommendations
         lines.extend(self._format_recommendations(result))
@@ -112,60 +102,102 @@ class MarkdownFormatter(ReportFormatter):
         emoji = "📋 " if self.include_emoji else ""
         score_emoji = self._get_score_emoji(result.consistency_score)
         
+        # Calculate project-specific stats
+        todoist_projects = []
+        for group in result.item_groups:
+            for item in group:
+                if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT:
+                    todoist_projects.append(item)
+        
+        projects_with_next_actions = sum(1 for p in todoist_projects if p.metadata.get('has_next_action', False))
+        total_next_action_tasks = sum(p.metadata.get('next_action_count', 0) for p in todoist_projects)
+        
         lines = [
             f"## {emoji}Executive Summary",
             "",
+            f"**Generated:** {metadata.generated_at.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"**Sources:** {', '.join(metadata.sources_audited)}",
+            "",
             f"**Consistency Score:** {score_emoji} {result.consistency_score:.1%}",
-            f"**Total Items:** {result.total_items}",
-            f"**Consistent Items:** {result.consistent_items}",
-            f"**Inconsistencies Found:** {len(result.inconsistencies)}",
+            f"**Projects Analyzed:** {len(todoist_projects)}",
+            f"**Projects with Next Actions:** {projects_with_next_actions}/{len(todoist_projects)} ({100*projects_with_next_actions/len(todoist_projects) if todoist_projects else 0:.1f}%)",
+            f"**Total Next Action Tasks:** {total_next_action_tasks}",
+            f"**Remediations Needed:** {len(result.inconsistencies)}",
             ""
         ]
-        
-        if result.inconsistencies:
-            severity_counts = {
-                'High': result.high_severity_count,
-                'Medium': result.medium_severity_count,
-                'Low': result.low_severity_count
-            }
-            
-            lines.append("**By Severity:**")
-            for severity, count in severity_counts.items():
-                if count > 0:
-                    severity_emoji = self._get_severity_emoji(severity.lower())
-                    lines.append(f"- {severity_emoji} {severity}: {count}")
         
         return lines
     
-    def _format_inconsistencies(self, inconsistencies: List[Inconsistency]) -> List[str]:
-        """Format detailed inconsistencies."""
-        emoji = "⚠️ " if self.include_emoji else ""
+    def _format_projects_overview(self, result: ComparisonResult) -> List[str]:
+        """Format the new project-centric overview section."""
         lines = [
-            f"## {emoji}Detailed Findings",
+            "## 📊 Project Overview",
+            "",
+            "*Projects listed with their next actions and any required remediations.*",
             ""
         ]
         
-        # Group by type
-        by_type = {}
-        for inc in inconsistencies:
-            if inc.type not in by_type:
-                by_type[inc.type] = []
-            by_type[inc.type].append(inc)
+        # Get all Todoist projects from item groups
+        projects = []
+        for group in result.item_groups:
+            for item in group:
+                if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT:
+                    projects.append((item, group))
         
-        for inc_type, type_inconsistencies in by_type.items():
-            type_emoji = self._get_inconsistency_emoji(inc_type)
-            lines.append(f"### {type_emoji} {inc_type.value.replace('_', ' ').title()} ({len(type_inconsistencies)})")
+        # Sort projects by category (work/personal) and then by name
+        projects.sort(key=lambda x: (x[0].category.value, x[0].raw_name or x[0].name))
+        
+        current_category = None
+        for project, group in projects:
+            # Add category headers
+            if current_category != project.category.value:
+                current_category = project.category.value
+                category_emoji = "💼" if current_category == "work" else "🏠"
+                lines.append(f"### {category_emoji} {current_category.title()} Projects")
+                lines.append("")
+            
+            project_name = project.raw_name or project.name
+            has_next_action = project.metadata.get('has_next_action', False)
+            next_action_count = project.metadata.get('next_action_count', 0)
+            next_action_label = project.metadata.get('next_action_label', 'next')
+            next_action_tasks = project.metadata.get('next_action_tasks', [])
+            
+            # Project header
+            lines.append(f"#### {project_name}")
             lines.append("")
             
-            for inc in type_inconsistencies:
-                severity_emoji = self._get_severity_emoji(inc.severity)
-                lines.append(f"**{severity_emoji} {inc.description}**")
-                lines.append(f"- *Action:* {inc.suggested_action}")
-                
-                if inc.items:
-                    sources = set(item.source.value for item in inc.items)
-                    lines.append(f"- *Affects:* {', '.join(sources)}")
-                
+            # Next action status
+            if has_next_action:
+                next_action_emoji = "⏭️" if self.include_emoji else ""
+                lines.append(f"**{next_action_emoji} Next Actions ({next_action_count}):**")
+                for task_name in next_action_tasks:
+                    task_emoji = "  • " if not self.include_emoji else "  ⏭️ "
+                    lines.append(f"{task_emoji}{task_name}")
+            else:
+                missing_emoji = "❌" if self.include_emoji else ""
+                lines.append(f"**{missing_emoji} Missing Next Action**")
+                lines.append(f"  • Add at least one task with @{next_action_label} label")
+            
+            lines.append("")
+            
+            # Find remediations for this project
+            project_remediations = []
+            for inc in result.inconsistencies:
+                # Check if this inconsistency affects this project
+                if inc.items and any(item.source == ItemSource.TODOIST and 
+                                   (item.raw_name or item.name) == project_name for item in inc.items):
+                    project_remediations.append(inc)
+            
+            # Display remediations
+            if project_remediations:
+                lines.append("**Remediations Needed:**")
+                for inc in project_remediations:
+                    severity_emoji = self._get_severity_emoji(inc.severity)
+                    lines.append(f"  • {severity_emoji} {inc.description}")
+                    lines.append(f"    *Action:* {inc.suggested_action}")
+                lines.append("")
+            else:
+                lines.append("**Status:** ✅ No remediations needed")
                 lines.append("")
         
         return lines
@@ -228,59 +260,6 @@ class MarkdownFormatter(ReportFormatter):
             if next_action_stats['next_action_labels_used']:
                 labels_list = ', '.join(f"@{label}" for label in next_action_stats['next_action_labels_used'])
                 lines.append(f"- 🏷️ **Labels used:** {labels_list}")
-        
-        return lines
-    
-    def _format_item_groups(self, item_groups: List[List[PARAItem]]) -> List[str]:
-        """Format item groups section."""
-        emoji = "📂 " if self.include_emoji else ""
-        lines = [
-            f"## {emoji}Item Groups",
-            "",
-            "*Groups of similar items found across tools:*",
-            ""
-        ]
-        
-        for i, group in enumerate(item_groups, 1):
-            if len(group) > 1:  # Only show groups with multiple items
-                canonical_name = group[0].raw_name or group[0].name
-                lines.append(f"### {i}. {canonical_name}")
-                lines.append("")
-                
-                for item in group:
-                    source_emoji = self._get_source_emoji(item.source)
-                    status_emoji = "✅" if item.is_active else "⭕"
-                    item_line = f"- {source_emoji} {status_emoji} {item.raw_name or item.name}"
-                    
-                    # Add next action status for Todoist projects
-                    if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT:
-                        has_next_action = item.metadata.get('has_next_action', False)
-                        next_action_count = item.metadata.get('next_action_count', 0)
-                        next_action_label = item.metadata.get('next_action_label', 'next')
-                        next_action_tasks = item.metadata.get('next_action_tasks', [])
-                        
-                        if has_next_action:
-                            next_action_emoji = "⏭️" if self.include_emoji else ""
-                            item_line += f" {next_action_emoji} {next_action_count} @{next_action_label}"
-                        else:
-                            missing_emoji = "❌" if self.include_emoji else ""
-                            item_line += f" {missing_emoji} No @{next_action_label}"
-                    
-                    lines.append(item_line)
-                    
-                    # Add next action tasks as sub-items for Todoist projects
-                    if (item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT and 
-                        item.metadata.get('has_next_action', False) and 
-                        item.metadata.get('next_action_tasks', [])):
-                        
-                        next_action_tasks = item.metadata.get('next_action_tasks', [])
-                        next_action_label = item.metadata.get('next_action_label', 'next')
-                        
-                        for task_name in next_action_tasks:
-                            task_emoji = "  ⏭️" if self.include_emoji else "  •"
-                            lines.append(f"{task_emoji} {task_name}")
-                
-                lines.append("")
         
         return lines
     
