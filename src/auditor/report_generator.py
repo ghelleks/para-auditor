@@ -165,14 +165,6 @@ class MarkdownFormatter(ReportFormatter):
             # Project header
             lines.append(f"{project_name}")
             
-            # Next action status
-            if has_next_action:
-                for task_name in next_action_tasks:
-                    task_emoji = "  • " if not self.include_emoji else "  ⏭️ "
-                    lines.append(f"{task_emoji}{task_name}")
-            else:
-                lines.append(f"  • Add at least one task with @{next_action_label} label")
-            
             # Find remediations for this project
             project_remediations = []
             for inc in result.inconsistencies:
@@ -181,12 +173,21 @@ class MarkdownFormatter(ReportFormatter):
                                    (item.raw_name or item.name) == project_name for item in inc.items):
                     project_remediations.append(inc)
             
+            # Next action status
+            if has_next_action:
+                for task_name in next_action_tasks:
+                    task_emoji = "  • " if not self.include_emoji else "  ⏭️ "
+                    lines.append(f"{task_emoji}{task_name}")
+            
             # Display remediations
             if project_remediations:
                 for inc in project_remediations:
                     severity_emoji = self._get_severity_emoji(inc.severity)
                     lines.append(f"  • {severity_emoji} {inc.description}")
                     lines.append(f"    *Action:* {inc.suggested_action}")
+            elif not has_next_action:
+                # Only show generic message if no remediations and no next actions
+                lines.append(f"  • Add at least one task with @{next_action_label} label")
             
             lines.append("")
         
