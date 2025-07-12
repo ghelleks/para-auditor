@@ -251,27 +251,30 @@ class TodoistConnector:
             if tasks is None:
                 return []
             
-            # Handle different response types similar to get_projects
-            task_list = []
-            if hasattr(tasks, '__iter__') and not isinstance(tasks, (list, str)):
-                # This is likely a paginator - iterate through it
+            # Handle different response types - be more explicit about list handling
+            if isinstance(tasks, list):
+                logger.debug(f"Tasks is a list with {len(tasks)} items")
+                return tasks
+            elif hasattr(tasks, '__iter__') and not isinstance(tasks, str):
+                # This is likely a paginator - convert to list
                 try:
-                    for task in tasks:
-                        task_list.append(task)
+                    task_list = list(tasks)
+                    logger.debug(f"Converted paginator to list with {len(task_list)} tasks")
+                    return task_list
                 except Exception as e:
-                    logger.warning(f"Error iterating through tasks paginator: {e}")
-                    if hasattr(tasks, 'data'):
-                        task_list = tasks.data
-                    elif isinstance(tasks, list):
-                        task_list = tasks
-                    else:
-                        task_list = [tasks]
-            elif isinstance(tasks, list):
-                task_list = tasks
+                    logger.warning(f"Error converting paginator to list: {e}")
+                    return []
+            elif hasattr(tasks, 'data'):
+                data = tasks.data
+                if isinstance(data, list):
+                    logger.debug(f"Found data attribute with {len(data)} tasks")
+                    return data
+                else:
+                    logger.debug(f"Data attribute is not a list: {type(data)}")
+                    return [data] if data else []
             else:
-                task_list = getattr(tasks, 'data', tasks) if hasattr(tasks, 'data') else [tasks]
-            
-            return task_list
+                logger.debug(f"Unknown tasks type: {type(tasks)}")
+                return [tasks] if tasks else []
             
         except Exception as e:
             logger.error(f"Error fetching tasks for project {project_id}: {e}")
@@ -288,57 +291,73 @@ class TodoistConnector:
         """
         try:
             normalized_label = self._normalize_label_name(label_name)
-            # Use the correct parameter name - it should be 'filter' not 'filter='
-            # Let's try different approaches based on the API version
-            tasks = None
+            logger.debug(f"Fetching tasks with label: @{normalized_label}")
             
             # Try with filter parameter (REST API v2 style)
             try:
                 tasks = self.api.get_tasks(filter=f"@{normalized_label}")
+                logger.debug(f"Filter API call returned: {type(tasks)}")
             except TypeError as e:
                 logger.debug(f"get_tasks with filter failed: {e}, trying alternative approaches")
                 # If filter parameter doesn't work, try getting all tasks and filtering locally
                 try:
                     all_tasks = self.api.get_tasks()
-                    # Filter tasks that have the label
+                    logger.debug(f"Got all tasks: {type(all_tasks)}")
+                    
+                    # Flatten the paginated task list and filter by label
                     task_list = []
-                    if hasattr(all_tasks, '__iter__') and not isinstance(all_tasks, (list, str)):
+                    if isinstance(all_tasks, list):
+                        # All tasks is already a list
                         for task in all_tasks:
                             if hasattr(task, 'labels') and normalized_label in task.labels:
                                 task_list.append(task)
-                    elif isinstance(all_tasks, list):
-                        for task in all_tasks:
-                            if hasattr(task, 'labels') and normalized_label in task.labels:
-                                task_list.append(task)
+                    else:
+                        # Handle paginated response - flatten the pages
+                        for page in all_tasks:
+                            if isinstance(page, list):
+                                # Each page is a list of tasks
+                                for task in page:
+                                    if hasattr(task, 'labels') and normalized_label in task.labels:
+                                        task_list.append(task)
+                            else:
+                                # Single task
+                                if hasattr(page, 'labels') and normalized_label in page.labels:
+                                    task_list.append(page)
+                    
+                    logger.debug(f"Filtered {len(task_list)} tasks with @{normalized_label} label")
                     return task_list
                 except Exception as e2:
                     logger.error(f"Failed to get all tasks: {e2}")
                     return []
             
             if tasks is None:
+                logger.debug("Tasks is None, returning empty list")
                 return []
             
-            # Handle different response types similar to get_projects
-            task_list = []
-            if hasattr(tasks, '__iter__') and not isinstance(tasks, (list, str)):
-                # This is likely a paginator - iterate through it
+            # Handle different response types - be more explicit about list handling
+            if isinstance(tasks, list):
+                logger.debug(f"Tasks is a list with {len(tasks)} items")
+                return tasks
+            elif hasattr(tasks, '__iter__') and not isinstance(tasks, str):
+                # This is likely a paginator - convert to list
                 try:
-                    for task in tasks:
-                        task_list.append(task)
+                    task_list = list(tasks)
+                    logger.debug(f"Converted paginator to list with {len(task_list)} tasks")
+                    return task_list
                 except Exception as e:
-                    logger.warning(f"Error iterating through tasks paginator: {e}")
-                    if hasattr(tasks, 'data'):
-                        task_list = tasks.data
-                    elif isinstance(tasks, list):
-                        task_list = tasks
-                    else:
-                        task_list = [tasks]
-            elif isinstance(tasks, list):
-                task_list = tasks
+                    logger.warning(f"Error converting paginator to list: {e}")
+                    return []
+            elif hasattr(tasks, 'data'):
+                data = tasks.data
+                if isinstance(data, list):
+                    logger.debug(f"Found data attribute with {len(data)} tasks")
+                    return data
+                else:
+                    logger.debug(f"Data attribute is not a list: {type(data)}")
+                    return [data] if data else []
             else:
-                task_list = getattr(tasks, 'data', tasks) if hasattr(tasks, 'data') else [tasks]
-            
-            return task_list
+                logger.debug(f"Unknown tasks type: {type(tasks)}")
+                return [tasks] if tasks else []
             
         except Exception as e:
             logger.error(f"Error fetching tasks with label '@{normalized_label}': {e}")
