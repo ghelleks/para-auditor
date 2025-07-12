@@ -191,7 +191,32 @@ class TodoistConnector:
             List of Task objects for the project
         """
         try:
-            tasks = self.api.get_tasks(project_id=project_id)
+            # Try with project_id parameter
+            tasks = None
+            try:
+                tasks = self.api.get_tasks(project_id=project_id)
+            except TypeError as e:
+                logger.debug(f"get_tasks with project_id failed: {e}, trying alternative approaches")
+                # If project_id parameter doesn't work, get all tasks and filter locally
+                try:
+                    all_tasks = self.api.get_tasks()
+                    # Filter tasks that belong to the project
+                    task_list = []
+                    if hasattr(all_tasks, '__iter__') and not isinstance(all_tasks, (list, str)):
+                        for task in all_tasks:
+                            if hasattr(task, 'project_id') and str(task.project_id) == str(project_id):
+                                task_list.append(task)
+                    elif isinstance(all_tasks, list):
+                        for task in all_tasks:
+                            if hasattr(task, 'project_id') and str(task.project_id) == str(project_id):
+                                task_list.append(task)
+                    return task_list
+                except Exception as e2:
+                    logger.error(f"Failed to get all tasks: {e2}")
+                    return []
+            
+            if tasks is None:
+                return []
             
             # Handle different response types similar to get_projects
             task_list = []
@@ -230,7 +255,35 @@ class TodoistConnector:
         """
         try:
             normalized_label = self._normalize_label_name(label_name)
-            tasks = self.api.get_tasks(filter=f"@{normalized_label}")
+            # Use the correct parameter name - it should be 'filter' not 'filter='
+            # Let's try different approaches based on the API version
+            tasks = None
+            
+            # Try with filter parameter (REST API v2 style)
+            try:
+                tasks = self.api.get_tasks(filter=f"@{normalized_label}")
+            except TypeError as e:
+                logger.debug(f"get_tasks with filter failed: {e}, trying alternative approaches")
+                # If filter parameter doesn't work, try getting all tasks and filtering locally
+                try:
+                    all_tasks = self.api.get_tasks()
+                    # Filter tasks that have the label
+                    task_list = []
+                    if hasattr(all_tasks, '__iter__') and not isinstance(all_tasks, (list, str)):
+                        for task in all_tasks:
+                            if hasattr(task, 'labels') and normalized_label in task.labels:
+                                task_list.append(task)
+                    elif isinstance(all_tasks, list):
+                        for task in all_tasks:
+                            if hasattr(task, 'labels') and normalized_label in task.labels:
+                                task_list.append(task)
+                    return task_list
+                except Exception as e2:
+                    logger.error(f"Failed to get all tasks: {e2}")
+                    return []
+            
+            if tasks is None:
+                return []
             
             # Handle different response types similar to get_projects
             task_list = []
