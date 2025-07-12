@@ -169,7 +169,7 @@ class MarkdownFormatter(ReportFormatter):
             # Next action status
             if has_next_action:
                 next_action_emoji = "⏭️" if self.include_emoji else ""
-                lines.append(f"**{next_action_emoji} Next Actions ({next_action_count}):**")
+                lines.append(f"**{next_action_emoji} Next Actions:**")
                 for task_name in next_action_tasks:
                     task_emoji = "  • " if not self.include_emoji else "  ⏭️ "
                     lines.append(f"{task_emoji}{task_name}")
