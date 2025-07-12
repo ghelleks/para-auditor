@@ -257,6 +257,7 @@ class MarkdownFormatter(ReportFormatter):
                         has_next_action = item.metadata.get('has_next_action', False)
                         next_action_count = item.metadata.get('next_action_count', 0)
                         next_action_label = item.metadata.get('next_action_label', 'next')
+                        next_action_tasks = item.metadata.get('next_action_tasks', [])
                         
                         if has_next_action:
                             next_action_emoji = "⏭️" if self.include_emoji else ""
@@ -266,6 +267,18 @@ class MarkdownFormatter(ReportFormatter):
                             item_line += f" {missing_emoji} No @{next_action_label}"
                     
                     lines.append(item_line)
+                    
+                    # Add next action tasks as sub-items for Todoist projects
+                    if (item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT and 
+                        item.metadata.get('has_next_action', False) and 
+                        item.metadata.get('next_action_tasks', [])):
+                        
+                        next_action_tasks = item.metadata.get('next_action_tasks', [])
+                        next_action_label = item.metadata.get('next_action_label', 'next')
+                        
+                        for task_name in next_action_tasks:
+                            task_emoji = "  ⏭️" if self.include_emoji else "  •"
+                            lines.append(f"{task_emoji} {task_name}")
                 
                 lines.append("")
         
