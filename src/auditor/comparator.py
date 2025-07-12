@@ -21,6 +21,7 @@ class InconsistencyType(Enum):
     DUPLICATE_ITEM = "duplicate_item"
     NAME_VARIATION = "name_variation"
     MISSING_EMOJI = "missing_emoji"
+    MISSING_NEXT_ACTION = "missing_next_action"
 
 
 @dataclass
@@ -246,6 +247,9 @@ class ItemComparator:
         # Check for emoji consistency
         inconsistencies.extend(self._check_emoji_consistency(group))
         
+        # Check for next actions in Todoist projects
+        inconsistencies.extend(self._check_next_actions(group))
+        
         return inconsistencies
     
     def _check_status_consistency(self, group: List[PARAItem]) -> List[Inconsistency]:
@@ -464,6 +468,42 @@ class ItemComparator:
                     'non_emoji_sources': non_emoji_sources
                 }
             ))
+        
+        return inconsistencies
+    
+    def _check_next_actions(self, group: List[PARAItem]) -> List[Inconsistency]:
+        """Check for missing next actions in Todoist projects.
+        
+        Args:
+            group: Group of similar items
+            
+        Returns:
+            List of next action inconsistencies
+        """
+        inconsistencies = []
+        
+        # Only check Todoist projects (not areas or items from other sources)
+        todoist_projects = [item for item in group if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT]
+        
+        for project in todoist_projects:
+            # Check if project metadata indicates it has next actions
+            has_next_action = project.metadata.get('has_next_action', False)
+            next_action_count = project.metadata.get('next_action_count', 0)
+            next_action_label = project.metadata.get('next_action_label', 'next')
+            
+            if not has_next_action:
+                inconsistencies.append(Inconsistency(
+                    type=InconsistencyType.MISSING_NEXT_ACTION,
+                    description=f"Project '{project.name}' has no @{next_action_label} actions",
+                    severity='medium',
+                    items=[project],
+                    suggested_action=f"Add at least one task with @{next_action_label} label to define the next action",
+                    metadata={
+                        'project_id': project.metadata.get('project_id'),
+                        'next_action_label': next_action_label,
+                        'next_action_count': next_action_count
+                    }
+                ))
         
         return inconsistencies
     

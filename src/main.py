@@ -133,6 +133,19 @@ Examples:
         help='Audit only areas (inactive items)'
     )
     
+    # Next action options
+    parser.add_argument(
+        '--next-action-label',
+        type=str,
+        metavar='LABEL',
+        help='Label name to check for next actions (default: "next"). "@" prefix optional.'
+    )
+    parser.add_argument(
+        '--skip-next-actions',
+        action='store_true',
+        help='Skip checking for next action labels'
+    )
+    
     # Debugging options
     parser.add_argument(
         '--verbose', '-v',
@@ -338,10 +351,29 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
             # Collect from Todoist
             if not args.dry_run:
                 print("  • Fetching Todoist projects...")
-                todoist_connector = TodoistConnector(config_manager.todoist_token)
+                
+                # Determine next action label (CLI override takes precedence)
+                next_action_label = config_manager.next_action_label
+                if hasattr(args, 'next_action_label') and args.next_action_label:
+                    next_action_label = args.next_action_label
+                
+                # Skip next actions if requested
+                if hasattr(args, 'skip_next_actions') and args.skip_next_actions:
+                    print("    Skipping next action checks as requested")
+                    next_action_label = None  # This will disable next action checking
+                
+                todoist_connector = TodoistConnector(
+                    config_manager.todoist_token,
+                    next_action_label=next_action_label or "next"
+                )
                 todoist_items = todoist_connector.get_projects()
                 all_items.extend(todoist_items)
-                print(f"    Found {len(todoist_items)} Todoist projects")
+                
+                # Show next action info if enabled
+                if next_action_label and not (hasattr(args, 'skip_next_actions') and args.skip_next_actions):
+                    print(f"    Found {len(todoist_items)} Todoist projects (checking @{next_action_label} labels)")
+                else:
+                    print(f"    Found {len(todoist_items)} Todoist projects")
             
             # Collect from Google Drive (Work)
             if not args.dry_run:
@@ -471,6 +503,16 @@ def print_audit_configuration(config_manager: ConfigManager, args: argparse.Name
     print(f"  • Areas Folder: {config_manager.areas_folder}")
     print(f"  • Similarity Threshold: {args.threshold}")
     print(f"  • Report Format: {getattr(args, 'format', 'markdown')}")
+    
+    # Show next action configuration
+    next_action_label = config_manager.next_action_label
+    if hasattr(args, 'next_action_label') and args.next_action_label:
+        next_action_label = args.next_action_label
+        print(f"  • Next Action Label: @{next_action_label} (CLI override)")
+    elif hasattr(args, 'skip_next_actions') and args.skip_next_actions:
+        print(f"  • Next Action Check: Disabled (CLI override)")
+    else:
+        print(f"  • Next Action Label: @{next_action_label}")
     
     if args.work_only:
         print("  • Filter: Work items only")

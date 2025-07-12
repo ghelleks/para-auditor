@@ -12,13 +12,15 @@ logger = logging.getLogger(__name__)
 class TodoistConnector:
     """Connector for Todoist API to fetch PARA method projects and tasks."""
     
-    def __init__(self, api_token: str):
+    def __init__(self, api_token: str, next_action_label: str = "next"):
         """Initialize Todoist connector.
         
         Args:
             api_token: Todoist API token
+            next_action_label: Label name to check for next actions (default: "next")
         """
         self.api = TodoistAPI(api_token)
+        self.next_action_label = self._normalize_label_name(next_action_label)
         
     def get_projects(self) -> List[PARAItem]:
         """Fetch all projects from Todoist and convert to PARAItems.
@@ -130,6 +132,21 @@ class TodoistConnector:
                 clean_name = project_name[1:].strip()  # Remove 💼 and any following whitespace
             
             
+            # Check for next action if this is a project
+            has_next_action = False
+            next_action_count = 0
+            next_action_tasks = []
+            
+            if is_favorite:  # Only check for next actions in projects (favorited items)
+                has_next_action = self.check_project_has_next_action(project.id)
+                if has_next_action:
+                    next_action_task_objects = self.get_next_action_tasks_for_project(project.id)
+                    next_action_count = len(next_action_task_objects)
+                    next_action_tasks = [getattr(task, 'content', 'Untitled Task') for task in next_action_task_objects]
+                    logger.debug(f"Project '{project_name}' has {next_action_count} @{self.next_action_label} tasks")
+                else:
+                    logger.debug(f"Project '{project_name}' has no @{self.next_action_label} tasks")
+            
             para_item = PARAItem(
                 name=clean_name,  # Use clean name for matching
                 raw_name=project_name,  # Store original name with emoji
@@ -140,7 +157,11 @@ class TodoistConnector:
                 metadata={
                     'project_id': project.id,
                     'color': project_color,
-                    'order': project_order
+                    'order': project_order,
+                    'has_next_action': has_next_action,
+                    'next_action_count': next_action_count,
+                    'next_action_tasks': next_action_tasks,
+                    'next_action_label': self.next_action_label
                 }
             )
             return para_item
@@ -149,8 +170,173 @@ class TodoistConnector:
             logger.error(f"Error processing project {getattr(project, 'id', 'unknown')}: {e}")
             return None
     
+    def _normalize_label_name(self, label_name: str) -> str:
+        """Normalize label name by removing '@' prefix if present.
+        
+        Args:
+            label_name: Raw label name (may include '@' prefix)
+            
+        Returns:
+            Normalized label name without '@' prefix
+        """
+        return label_name.lstrip('@')
     
+    def get_tasks_for_project(self, project_id: str) -> List:
+        """Fetch all tasks for a specific project from Todoist.
+        
+        Args:
+            project_id: Todoist project ID
+            
+        Returns:
+            List of Task objects for the project
+        """
+        try:
+            tasks = self.api.get_tasks(project_id=project_id)
+            
+            # Handle different response types similar to get_projects
+            task_list = []
+            if hasattr(tasks, '__iter__') and not isinstance(tasks, (list, str)):
+                # This is likely a paginator - iterate through it
+                try:
+                    for task in tasks:
+                        task_list.append(task)
+                except Exception as e:
+                    logger.warning(f"Error iterating through tasks paginator: {e}")
+                    if hasattr(tasks, 'data'):
+                        task_list = tasks.data
+                    elif isinstance(tasks, list):
+                        task_list = tasks
+                    else:
+                        task_list = [tasks]
+            elif isinstance(tasks, list):
+                task_list = tasks
+            else:
+                task_list = getattr(tasks, 'data', tasks) if hasattr(tasks, 'data') else [tasks]
+            
+            return task_list
+            
+        except Exception as e:
+            logger.error(f"Error fetching tasks for project {project_id}: {e}")
+            return []
     
+    def get_tasks_with_label(self, label_name: str) -> List:
+        """Fetch all tasks with a specific label.
+        
+        Args:
+            label_name: Label name without '@' prefix (e.g., 'next', 'waiting')
+            
+        Returns:
+            List of Task objects with the specified label
+        """
+        try:
+            normalized_label = self._normalize_label_name(label_name)
+            tasks = self.api.get_tasks(filter=f"@{normalized_label}")
+            
+            # Handle different response types similar to get_projects
+            task_list = []
+            if hasattr(tasks, '__iter__') and not isinstance(tasks, (list, str)):
+                # This is likely a paginator - iterate through it
+                try:
+                    for task in tasks:
+                        task_list.append(task)
+                except Exception as e:
+                    logger.warning(f"Error iterating through tasks paginator: {e}")
+                    if hasattr(tasks, 'data'):
+                        task_list = tasks.data
+                    elif isinstance(tasks, list):
+                        task_list = tasks
+                    else:
+                        task_list = [tasks]
+            elif isinstance(tasks, list):
+                task_list = tasks
+            else:
+                task_list = getattr(tasks, 'data', tasks) if hasattr(tasks, 'data') else [tasks]
+            
+            return task_list
+            
+        except Exception as e:
+            logger.error(f"Error fetching tasks with label '@{normalized_label}': {e}")
+            return []
+    
+    def check_project_has_next_action(self, project_id: str, next_action_label: str = None) -> bool:
+        """Check if a project has at least one task with specified label.
+        
+        Args:
+            project_id: Todoist project ID
+            next_action_label: Label name to check for (without '@' prefix). If None, uses instance default.
+            
+        Returns:
+            True if project has at least one task with the specified label
+        """
+        if next_action_label is None:
+            next_action_label = self.next_action_label
+        else:
+            next_action_label = self._normalize_label_name(next_action_label)
+        
+        try:
+            # Get all tasks with the specified label
+            tasks_with_label = self.get_tasks_with_label(next_action_label)
+            
+            # Check if any of these tasks belong to the specified project
+            for task in tasks_with_label:
+                if hasattr(task, 'project_id') and task.project_id == project_id:
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking next action for project {project_id}: {e}")
+            return False
+    
+    def get_next_action_tasks_for_project(self, project_id: str, next_action_label: str = None) -> List:
+        """Get all tasks with next action label for a specific project.
+        
+        Args:
+            project_id: Todoist project ID
+            next_action_label: Label name to check for (without '@' prefix). If None, uses instance default.
+            
+        Returns:
+            List of Task objects with next action label in the specified project
+        """
+        if next_action_label is None:
+            next_action_label = self.next_action_label
+        else:
+            next_action_label = self._normalize_label_name(next_action_label)
+        
+        try:
+            # Get all tasks with the specified label
+            tasks_with_label = self.get_tasks_with_label(next_action_label)
+            
+            # Filter tasks that belong to the specified project
+            project_tasks = []
+            for task in tasks_with_label:
+                if hasattr(task, 'project_id') and task.project_id == project_id:
+                    project_tasks.append(task)
+            
+            return project_tasks
+            
+        except Exception as e:
+            logger.error(f"Error getting next action tasks for project {project_id}: {e}")
+            return []
+    
+    def validate_label_exists(self, label_name: str) -> bool:
+        """Check if a label exists in Todoist.
+        
+        Args:
+            label_name: Label name to validate
+            
+        Returns:
+            True if label exists, False otherwise
+        """
+        try:
+            normalized_label = self._normalize_label_name(label_name)
+            # Try to fetch tasks with this label - if it doesn't exist, no tasks will be returned
+            # This is a safe way to check without causing errors
+            self.get_tasks_with_label(normalized_label)
+            return True
+        except Exception as e:
+            logger.warning(f"Label '@{normalized_label}' validation failed: {e}")
+            return False
     
     def test_connection(self) -> bool:
         """Test connection to Todoist API.

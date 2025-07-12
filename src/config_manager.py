@@ -17,7 +17,9 @@ class ConfigManager:
     DEFAULT_CONFIG_PATH = "config/config.yaml"
     DEFAULT_CONFIG_TEMPLATE = {
         "todoist": {
-            "api_token": "your_todoist_token_here"
+            "api_token": "your_todoist_token_here",
+            "next_action_label": "next",
+            "check_next_actions": True
         },
         "google_drive": {
             "work_account_domain": "@yourcompany.com",
@@ -134,6 +136,16 @@ class ConfigManager:
         valid_formats = ["markdown", "json", "text"]
         if report_format and report_format not in valid_formats:
             raise ConfigError(f"Report format must be one of: {', '.join(valid_formats)}")
+        
+        # Validate next action label
+        next_action_label = self.get("todoist.next_action_label")
+        if next_action_label and not isinstance(next_action_label, str):
+            raise ConfigError("Next action label must be a string")
+        
+        # Validate check_next_actions setting
+        check_next_actions = self.get("todoist.check_next_actions")
+        if check_next_actions is not None and not isinstance(check_next_actions, bool):
+            raise ConfigError("check_next_actions must be a boolean value")
     
     def _get_nested_value(self, data: Dict[str, Any], path: str) -> Any:
         """Get a nested dictionary value using dot notation."""
@@ -228,3 +240,13 @@ class ConfigManager:
     def report_format(self) -> str:
         """Get report output format."""
         return self.get("audit_settings.report_format", "markdown")
+    
+    @property
+    def next_action_label(self) -> str:
+        """Get next action label name."""
+        return self.get("todoist.next_action_label", "next")
+    
+    @property
+    def check_next_actions(self) -> bool:
+        """Get whether to check for next actions."""
+        return self.get("todoist.check_next_actions", True)

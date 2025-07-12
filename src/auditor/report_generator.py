@@ -214,6 +214,21 @@ class MarkdownFormatter(ReportFormatter):
             cat_emoji = "💼" if category == "Work" else "🏠"
             lines.append(f"- {cat_emoji} **{category}:** {count}")
         
+        # Next action statistics
+        next_action_stats = self._calculate_next_action_stats(result)
+        if next_action_stats['total_projects'] > 0:
+            lines.append("")
+            lines.append("### Next Action Status")
+            lines.append("")
+            coverage_percent = (next_action_stats['projects_with_next_actions'] / next_action_stats['total_projects']) * 100
+            lines.append(f"- ⏭️ **Projects with next actions:** {next_action_stats['projects_with_next_actions']}/{next_action_stats['total_projects']} ({coverage_percent:.1f}%)")
+            if next_action_stats['projects_without_next_actions'] > 0:
+                lines.append(f"- ❌ **Projects missing next actions:** {next_action_stats['projects_without_next_actions']}")
+            lines.append(f"- 📋 **Total next action tasks:** {next_action_stats['total_next_action_tasks']}")
+            if next_action_stats['next_action_labels_used']:
+                labels_list = ', '.join(f"@{label}" for label in next_action_stats['next_action_labels_used'])
+                lines.append(f"- 🏷️ **Labels used:** {labels_list}")
+        
         return lines
     
     def _format_item_groups(self, item_groups: List[List[PARAItem]]) -> List[str]:
@@ -235,7 +250,22 @@ class MarkdownFormatter(ReportFormatter):
                 for item in group:
                     source_emoji = self._get_source_emoji(item.source)
                     status_emoji = "✅" if item.is_active else "⭕"
-                    lines.append(f"- {source_emoji} {status_emoji} {item.raw_name or item.name}")
+                    item_line = f"- {source_emoji} {status_emoji} {item.raw_name or item.name}"
+                    
+                    # Add next action status for Todoist projects
+                    if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT:
+                        has_next_action = item.metadata.get('has_next_action', False)
+                        next_action_count = item.metadata.get('next_action_count', 0)
+                        next_action_label = item.metadata.get('next_action_label', 'next')
+                        
+                        if has_next_action:
+                            next_action_emoji = "⏭️" if self.include_emoji else ""
+                            item_line += f" {next_action_emoji} {next_action_count} @{next_action_label}"
+                        else:
+                            missing_emoji = "❌" if self.include_emoji else ""
+                            item_line += f" {missing_emoji} No @{next_action_label}"
+                    
+                    lines.append(item_line)
                 
                 lines.append("")
         
@@ -280,6 +310,37 @@ class MarkdownFormatter(ReportFormatter):
         
         return lines
     
+    def _calculate_next_action_stats(self, result: ComparisonResult) -> Dict[str, Any]:
+        """Calculate next action statistics for Todoist projects."""
+        stats = {
+            'total_projects': 0,
+            'projects_with_next_actions': 0,
+            'projects_without_next_actions': 0,
+            'total_next_action_tasks': 0,
+            'next_action_labels_used': set()
+        }
+        
+        for group in result.item_groups:
+            for item in group:
+                if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT:
+                    stats['total_projects'] += 1
+                    has_next_action = item.metadata.get('has_next_action', False)
+                    next_action_count = item.metadata.get('next_action_count', 0)
+                    next_action_label = item.metadata.get('next_action_label', 'next')
+                    
+                    if has_next_action:
+                        stats['projects_with_next_actions'] += 1
+                        stats['total_next_action_tasks'] += next_action_count
+                    else:
+                        stats['projects_without_next_actions'] += 1
+                    
+                    stats['next_action_labels_used'].add(next_action_label)
+        
+        # Convert set to list for consistency
+        stats['next_action_labels_used'] = list(stats['next_action_labels_used'])
+        
+        return stats
+    
     def _get_score_emoji(self, score: float) -> str:
         """Get emoji for consistency score."""
         if not self.include_emoji:
@@ -313,7 +374,8 @@ class MarkdownFormatter(ReportFormatter):
             InconsistencyType.WRONG_ACCOUNT: '👤',
             InconsistencyType.DUPLICATE_ITEM: '👥',
             InconsistencyType.NAME_VARIATION: '📝',
-            InconsistencyType.MISSING_EMOJI: '😐'
+            InconsistencyType.MISSING_EMOJI: '😐',
+            InconsistencyType.MISSING_NEXT_ACTION: '⏭️'
         }.get(inc_type, '❓')
     
     def _get_source_emoji(self, source: ItemSource) -> str:
@@ -451,6 +513,32 @@ class JSONFormatter(ReportFormatter):
             inc_type = inc.type.value
             inconsistency_counts[inc_type] = inconsistency_counts.get(inc_type, 0) + 1
         
+        # Next action statistics
+        next_action_stats = {
+            'projects_with_next_actions': 0,
+            'projects_without_next_actions': 0,
+            'total_next_action_tasks': 0,
+            'next_action_labels_used': set()
+        }
+        
+        for group in result.item_groups:
+            for item in group:
+                if item.source.value == 'todoist' and item.type.value == 'project':
+                    has_next_action = item.metadata.get('has_next_action', False)
+                    next_action_count = item.metadata.get('next_action_count', 0)
+                    next_action_label = item.metadata.get('next_action_label', 'next')
+                    
+                    if has_next_action:
+                        next_action_stats['projects_with_next_actions'] += 1
+                        next_action_stats['total_next_action_tasks'] += next_action_count
+                    else:
+                        next_action_stats['projects_without_next_actions'] += 1
+                    
+                    next_action_stats['next_action_labels_used'].add(next_action_label)
+        
+        # Convert set to list for JSON serialization
+        next_action_stats['next_action_labels_used'] = list(next_action_stats['next_action_labels_used'])
+        
         return {
             'items_by_source': source_counts,
             'items_by_type': type_counts,
@@ -458,7 +546,8 @@ class JSONFormatter(ReportFormatter):
             'emoji_usage': emoji_counts,
             'inconsistencies_by_type': inconsistency_counts,
             'orphaned_items_count': len(result.orphaned_items),
-            'item_groups_count': len(result.item_groups)
+            'item_groups_count': len(result.item_groups),
+            'next_action_stats': next_action_stats
         }
 
 
