@@ -446,10 +446,7 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
             # Print to console if no output file specified
             if not args.output:
                 print("\n" + "="*60)
-                if args.verbose:
-                    print(report_content)
-                else:
-                    print_project_alignment_view(filtered_items, comparison_result)
+                print(report_content)
             else:
                 print(f"\n✅ Report saved to: {args.output}")
             
