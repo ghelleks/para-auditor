@@ -10,18 +10,23 @@ logger = logging.getLogger(__name__)
 
 
 class TodoistConnector:
-    """Connector for Todoist API to fetch PARA method projects and tasks."""
+    """Connector for Todoist API to fetch projects and tasks."""
     
     def __init__(self, api_token: str, next_action_label: str = "next"):
         """Initialize Todoist connector.
         
         Args:
             api_token: Todoist API token
-            next_action_label: Label name to check for next actions (default: "next")
+            next_action_label: Label name to check for next actions (without '@' prefix)
         """
+        self.api_token = api_token
         self.api = TodoistAPI(api_token)
         self.next_action_label = self._normalize_label_name(next_action_label)
         
+        # Cache for next action tasks to avoid repeated API calls
+        self._next_action_tasks_cache = None
+        self._cache_populated = False
+
     def get_projects(self) -> List[PARAItem]:
         """Fetch all projects from Todoist and convert to PARAItems.
         
@@ -29,6 +34,13 @@ class TodoistConnector:
             List of PARAItem objects representing Todoist projects
         """
         try:
+            # Reset cache for each get_projects call
+            self._next_action_tasks_cache = None
+            self._cache_populated = False
+            
+            # Pre-populate the next action tasks cache to avoid repeated API calls
+            self._populate_next_action_cache()
+            
             projects_response = self.api.get_projects()
             para_items = []
             
@@ -36,7 +48,7 @@ class TodoistConnector:
             if not projects_response:
                 logger.warning("No projects returned from Todoist API")
                 return []
-            
+
             # Handle different response types from Todoist API
             project_list = []
             
@@ -92,6 +104,27 @@ class TodoistConnector:
         except Exception as e:
             logger.error(f"Error fetching Todoist projects: {e}")
             raise
+
+    def _populate_next_action_cache(self):
+        """Pre-populate the cache with next action tasks to avoid repeated API calls."""
+        if self._cache_populated:
+            return
+            
+        try:
+            logger.debug(f"Pre-populating cache with @{self.next_action_label} tasks")
+            self._next_action_tasks_cache = self.get_tasks_with_label(self.next_action_label)
+            self._cache_populated = True
+            logger.debug(f"Cached {len(self._next_action_tasks_cache)} @{self.next_action_label} tasks")
+        except Exception as e:
+            logger.error(f"Error populating next action cache: {e}")
+            self._next_action_tasks_cache = []
+            self._cache_populated = True
+
+    def _get_cached_next_action_tasks(self) -> List:
+        """Get cached next action tasks, populating cache if necessary."""
+        if not self._cache_populated:
+            self._populate_next_action_cache()
+        return self._next_action_tasks_cache or []
     
     def _process_single_project(self, project) -> Optional[PARAItem]:
         """Process a single project object and convert to PARAItem.
@@ -327,8 +360,12 @@ class TodoistConnector:
             next_action_label = self._normalize_label_name(next_action_label)
         
         try:
-            # Get all tasks with the specified label
-            tasks_with_label = self.get_tasks_with_label(next_action_label)
+            # Use cached tasks if available and label matches our instance label
+            if next_action_label == self.next_action_label:
+                tasks_with_label = self._get_cached_next_action_tasks()
+            else:
+                # If different label requested, fetch it directly
+                tasks_with_label = self.get_tasks_with_label(next_action_label)
             
             # Check if any of these tasks belong to the specified project
             for task in tasks_with_label:
@@ -357,8 +394,12 @@ class TodoistConnector:
             next_action_label = self._normalize_label_name(next_action_label)
         
         try:
-            # Get all tasks with the specified label
-            tasks_with_label = self.get_tasks_with_label(next_action_label)
+            # Use cached tasks if available and label matches our instance label
+            if next_action_label == self.next_action_label:
+                tasks_with_label = self._get_cached_next_action_tasks()
+            else:
+                # If different label requested, fetch it directly
+                tasks_with_label = self.get_tasks_with_label(next_action_label)
             
             # Filter tasks that belong to the specified project
             project_tasks = []
