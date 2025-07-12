@@ -163,8 +163,7 @@ class MarkdownFormatter(ReportFormatter):
             next_action_tasks = project.metadata.get('next_action_tasks', [])
             
             # Project header
-            lines.append(f"#### {project_name}")
-            lines.append("")
+            lines.append(f"{project_name}")
             
             # Next action status
             if has_next_action:
@@ -173,8 +172,6 @@ class MarkdownFormatter(ReportFormatter):
                     lines.append(f"{task_emoji}{task_name}")
             else:
                 lines.append(f"  • Add at least one task with @{next_action_label} label")
-            
-            lines.append("")
             
             # Find remediations for this project
             project_remediations = []
@@ -186,15 +183,12 @@ class MarkdownFormatter(ReportFormatter):
             
             # Display remediations
             if project_remediations:
-                lines.append("**Remediations Needed:**")
                 for inc in project_remediations:
                     severity_emoji = self._get_severity_emoji(inc.severity)
                     lines.append(f"  • {severity_emoji} {inc.description}")
                     lines.append(f"    *Action:* {inc.suggested_action}")
-                lines.append("")
-            else:
-                lines.append("**Status:** ✅ No remediations needed")
-                lines.append("")
+            
+            lines.append("")
         
         return lines
     
