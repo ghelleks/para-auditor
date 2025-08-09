@@ -276,8 +276,22 @@ class MarkdownFormatter(ReportFormatter):
         if high_priority:
             lines.append("### High Priority Actions")
             lines.append("")
-            for inc in high_priority[:5]:  # Top 5
-                lines.append(f"1. {inc.suggested_action}")
+            for idx, inc in enumerate(high_priority[:5], start=1):  # Top 5 with context
+                # Extract related Todoist project names; fall back to affected item names
+                project_names = [
+                    (itm.raw_name or itm.name)
+                    for itm in inc.items
+                    if getattr(itm, 'source', None) == ItemSource.TODOIST and getattr(itm, 'type', None) == ItemType.PROJECT
+                ]
+                if not project_names:
+                    project_names = list({(itm.raw_name or itm.name) for itm in inc.items})
+
+                # Limit display length for readability
+                display_names = project_names[:3]
+                more_count = max(0, len(project_names) - len(display_names))
+                names_str = ", ".join(display_names) + (f" (+{more_count} more)" if more_count else "")
+
+                lines.append(f"{idx}. {inc.suggested_action} — Project(s): {names_str}")
             lines.append("")
         
         # General recommendations
