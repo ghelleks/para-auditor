@@ -76,13 +76,12 @@ class MarkdownFormatter(ReportFormatter):
         # Summary
         lines.extend(self._format_summary(result, metadata))
         lines.append("")
-        
-        # Project Overview (new project-centric format)
-        lines.extend(self._format_projects_overview(result))
+        # ASCII table of Todoist projects vs Drives
+        lines.extend(self._format_ascii_table(result))
         lines.append("")
         
-        # Recommendations
-        lines.extend(self._format_recommendations(result))
+        # Combined Next Actions and Issues list
+        lines.extend(self._format_next_actions_and_issues(result))
         
         return "\n".join(lines)
     
@@ -191,6 +190,93 @@ class MarkdownFormatter(ReportFormatter):
             
             lines.append("")
         
+        return lines
+
+    def _format_ascii_table(self, result: ComparisonResult) -> List[str]:
+        """Render an ASCII table: each Todoist project is a row; columns for Work/Personal Drive with checks."""
+        # Collect Todoist projects and presence in drives
+        rows = []  # (project_name, work_present, personal_present)
+        for group in result.item_groups:
+            todoist_projects = [i for i in group if i.source == ItemSource.TODOIST and i.type == ItemType.PROJECT]
+            if not todoist_projects:
+                continue
+            work_present = any(i.source == ItemSource.GDRIVE_WORK for i in group)
+            personal_present = any(i.source == ItemSource.GDRIVE_PERSONAL for i in group)
+            for p in todoist_projects:
+                rows.append((p.raw_name or p.name, work_present, personal_present))
+
+        # Sort rows by category emoji presence (💼 prefix in raw) then name
+        rows.sort(key=lambda r: r[0])
+
+        # Column headers
+        headers = ["Project", "Work Drive", "Personal Drive"]
+        # Determine column widths
+        col1_width = max(len(headers[0]), *(len(name) for name, _, _ in rows)) if rows else len(headers[0])
+        col2_width = len(headers[1])
+        col3_width = len(headers[2])
+
+        # Table border builders
+        def border():
+            return "+-" + "-" * col1_width + "-+-" + "-" * col2_width + "-+-" + "-" * col3_width + "-+"
+        def row_line(c1, c2, c3):
+            return f"| {c1:<{col1_width}} | {c2:^{col2_width}} | {c3:^{col3_width}} |"
+
+        lines = ["## Project Alignment", ""]
+        lines.append(border())
+        lines.append(row_line(headers[0], headers[1], headers[2]))
+        lines.append(border())
+
+        check = "✅"
+        cross = "❌"
+        for name, w_ok, p_ok in rows:
+            lines.append(row_line(name, check if w_ok else cross, check if p_ok else cross))
+        if not rows:
+            lines.append(row_line("(no projects)", "-", "-"))
+        lines.append(border())
+        return lines
+
+    def _format_next_actions_and_issues(self, result: ComparisonResult) -> List[str]:
+        """Combined list of next actions (as checkboxes) and issues/recommendations in the same list."""
+        lines: List[str] = ["## Next Actions and Issues", ""]
+
+        # Build a mapping from project name to next actions and issues
+        project_entries = []  # list of tuples (project_name, next_action_tasks:list, issues:list[str])
+
+        # Precompute issues per project
+        issues_by_project: Dict[str, List[str]] = {}
+        for inc in result.inconsistencies:
+            # Build a compact description with suggested action
+            desc = f"{inc.description} (Action: {inc.suggested_action})"
+            for itm in inc.items:
+                if itm.source == ItemSource.TODOIST and itm.type == ItemType.PROJECT:
+                    pname = itm.raw_name or itm.name
+                    issues_by_project.setdefault(pname, []).append(desc)
+
+        # Collect next actions per project
+        for group in result.item_groups:
+            for item in group:
+                if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT:
+                    pname = item.raw_name or item.name
+                    next_tasks = item.metadata.get('next_action_tasks', []) or []
+                    project_entries.append((pname, next_tasks, issues_by_project.get(pname, [])))
+
+        # Sort by project name
+        project_entries.sort(key=lambda t: t[0])
+
+        any_output = False
+        for pname, next_tasks, issues in project_entries:
+            # Next actions
+            for task in next_tasks:
+                lines.append(f"- [ ] {pname}: {task}")
+                any_output = True
+            # Issues in same list
+            for issue in issues:
+                lines.append(f"- {pname}: {issue}")
+                any_output = True
+
+        if not any_output:
+            lines.append("(no next actions or issues)")
+
         return lines
     
     def _format_statistics(self, result: ComparisonResult, metadata: ReportMetadata) -> List[str]:
