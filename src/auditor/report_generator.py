@@ -76,8 +76,8 @@ class MarkdownFormatter(ReportFormatter):
         # Summary
         lines.extend(self._format_summary(result, metadata))
         lines.append("")
-        # ASCII table of Todoist projects vs Drives
-        lines.extend(self._format_ascii_table(result))
+        # Markdown-compliant table of Todoist projects vs Drives
+        lines.extend(self._format_markdown_table(result))
         lines.append("")
         
         # Combined Next Actions and Issues list
@@ -192,8 +192,9 @@ class MarkdownFormatter(ReportFormatter):
         
         return lines
 
-    def _format_ascii_table(self, result: ComparisonResult) -> List[str]:
-        """Render an ASCII table: each Todoist project is a row; columns for Work/Personal Drive with checks."""
+    def _format_markdown_table(self, result: ComparisonResult) -> List[str]:
+        """Render a Markdown table: each Todoist project is a row; columns for Work/Personal Drive with checks.
+        The cells are padded so columns align in monospace displays."""
         # Collect Todoist projects and presence in drives
         rows = []  # (project_name, work_present, personal_present)
         for group in result.item_groups:
@@ -205,34 +206,45 @@ class MarkdownFormatter(ReportFormatter):
             for p in todoist_projects:
                 rows.append((p.raw_name or p.name, work_present, personal_present))
 
-        # Sort rows by category emoji presence (💼 prefix in raw) then name
+        # Sort rows by name
         rows.sort(key=lambda r: r[0])
 
         # Column headers
         headers = ["Project", "Work Drive", "Personal Drive"]
-        # Determine column widths
+        # Determine column widths for monospace alignment
         col1_width = max(len(headers[0]), *(len(name) for name, _, _ in rows)) if rows else len(headers[0])
-        col2_width = len(headers[1])
-        col3_width = len(headers[2])
+        col2_width = max(len(headers[1]), 1)
+        col3_width = max(len(headers[2]), 1)
 
-        # Table border builders
-        def border():
-            return "+-" + "-" * col1_width + "-+-" + "-" * col2_width + "-+-" + "-" * col3_width + "-+"
-        def row_line(c1, c2, c3):
-            return f"| {c1:<{col1_width}} | {c2:^{col2_width}} | {c3:^{col3_width}} |"
+        def header_line():
+            return f"| {headers[0]:<{col1_width}} | {headers[1]:^{col2_width}} | {headers[2]:^{col3_width}} |"
+
+        # Alignment row (Markdown-compliant); keep widths for monospace alignment
+        def align_cell(width: int, align: str) -> str:
+            if align == 'left':
+                return '-' * max(3, width)
+            if align == 'center':
+                core = '-' * max(1, width - 2)
+                return f":{core}:" if width >= 3 else ':--:'
+            return '-' * max(3, width)
+
+        align_row = f"| {align_cell(col1_width, 'left')} | {align_cell(col2_width, 'center')} | {align_cell(col3_width, 'center')} |"
+
+        def data_line(name: str, w_ok: bool, p_ok: bool) -> str:
+            check = '✅'
+            cross = '❌'
+            c2 = check if w_ok else cross
+            c3 = check if p_ok else cross
+            return f"| {name:<{col1_width}} | {c2:^{col2_width}} | {c3:^{col3_width}} |"
 
         lines = ["## Project Alignment", ""]
-        lines.append(border())
-        lines.append(row_line(headers[0], headers[1], headers[2]))
-        lines.append(border())
-
-        check = "✅"
-        cross = "❌"
-        for name, w_ok, p_ok in rows:
-            lines.append(row_line(name, check if w_ok else cross, check if p_ok else cross))
-        if not rows:
-            lines.append(row_line("(no projects)", "-", "-"))
-        lines.append(border())
+        lines.append(header_line())
+        lines.append(align_row)
+        if rows:
+            for name, w_ok, p_ok in rows:
+                lines.append(data_line(name, w_ok, p_ok))
+        else:
+            lines.append(data_line("(no projects)", False, False))
         return lines
 
     def _format_next_actions_and_issues(self, result: ComparisonResult) -> List[str]:
