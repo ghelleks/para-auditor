@@ -254,15 +254,15 @@ class MarkdownFormatter(ReportFormatter):
         # Build a mapping from project name to next actions and issues
         project_entries = []  # list of tuples (project_name, next_action_tasks:list, issues:list[str])
 
-        # Precompute issues per project
+        # Precompute issues per project (as actionable to-do tasks)
         issues_by_project: Dict[str, List[str]] = {}
         for inc in result.inconsistencies:
-            # Build a compact description with suggested action
-            desc = f"{inc.description} (Action: {inc.suggested_action})"
+            # Use suggested_action as the to-do phrasing; fall back to description
+            action_text = inc.suggested_action.strip() if inc.suggested_action else inc.description.strip()
             for itm in inc.items:
                 if itm.source == ItemSource.TODOIST and itm.type == ItemType.PROJECT:
                     pname = itm.raw_name or itm.name
-                    issues_by_project.setdefault(pname, []).append(desc)
+                    issues_by_project.setdefault(pname, []).append(action_text)
 
         # Collect next actions per project
         for group in result.item_groups:
@@ -283,8 +283,16 @@ class MarkdownFormatter(ReportFormatter):
                 lines.append(f"- [ ] {task}")
                 any_output = True
             # Issues in same list
-            for issue in issues:
-                lines.append(f"- {issue}")
+            if issues:
+                # De-duplicate while preserving order
+                seen = set()
+                dedup_issues = []
+                for it in issues:
+                    if it not in seen:
+                        seen.add(it)
+                        dedup_issues.append(it)
+                for issue_action in dedup_issues:
+                    lines.append(f"- [ ] {issue_action}")
                 any_output = True
             lines.append("")
 
