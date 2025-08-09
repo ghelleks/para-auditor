@@ -15,6 +15,7 @@ from .connectors.apple_notes_connector import AppleNotesConnector
 from .auditor.comparator import ItemComparator
 from .auditor.report_generator import ReportGenerator
 from .models.para_item import PARAItem, ItemType, CategoryType, ItemSource
+from .utils.spinner import spinner
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -146,11 +147,17 @@ Examples:
         help='Skip checking for next action labels'
     )
     
-    # Debugging options
-    parser.add_argument(
+    # Output control options
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument(
         '--verbose', '-v',
         action='store_true',
-        help='Enable verbose logging and detailed output with full report and statistics'
+        help='Show detailed progress information'
+    )
+    output_group.add_argument(
+        '--quiet', '-q',
+        action='store_true',
+        help='No output until completion (silent mode)'
     )
     parser.add_argument(
         '--dry-run',
@@ -307,9 +314,140 @@ def handle_setup_mode(config_manager: ConfigManager) -> int:
         return 1
 
 
+def collect_all_data_verbose(config_manager: ConfigManager, args: argparse.Namespace, google_auth: GoogleAuthenticator) -> List[PARAItem]:
+    """Collect data with verbose progress output."""
+    all_items = []
+    
+    print("📥 Collecting data from sources...")
+    
+    # Collect from Todoist
+    if not args.dry_run:
+        print("  • Fetching Todoist projects...")
+        
+        # Determine next action label (CLI override takes precedence)
+        next_action_label = config_manager.next_action_label
+        if hasattr(args, 'next_action_label') and args.next_action_label:
+            next_action_label = args.next_action_label
+        
+        # Skip next actions if requested
+        if hasattr(args, 'skip_next_actions') and args.skip_next_actions:
+            print("    Skipping next action checks as requested")
+            next_action_label = None  # This will disable next action checking
+        
+        todoist_connector = TodoistConnector(
+            config_manager.todoist_token,
+            next_action_label=next_action_label or "next"
+        )
+        todoist_items = todoist_connector.get_projects()
+        all_items.extend(todoist_items)
+        
+        # Show next action info if enabled
+        if next_action_label and not (hasattr(args, 'skip_next_actions') and args.skip_next_actions):
+            print(f"    Found {len(todoist_items)} Todoist projects (checking @{next_action_label} labels)")
+        else:
+            print(f"    Found {len(todoist_items)} Todoist projects")
+    
+    # Collect from Google Drive (Work)
+    if not args.dry_run:
+        print("  • Fetching work Google Drive folders...")
+        work_credentials = google_auth.get_credentials('work')
+        work_connector = GDriveConnector(work_credentials, 'work')
+        work_items = work_connector.get_para_folders(config_manager.gdrive_base_folder_name)
+        all_items.extend(work_items)
+        print(f"    Found {len(work_items)} work folders")
+    
+    # Collect from Google Drive (Personal)
+    if not args.dry_run:
+        print("  • Fetching personal Google Drive folders...")
+        personal_credentials = google_auth.get_credentials('personal')
+        personal_connector = GDriveConnector(personal_credentials, 'personal')
+        personal_items = personal_connector.get_para_folders(config_manager.gdrive_base_folder_name)
+        all_items.extend(personal_items)
+        print(f"    Found {len(personal_items)} personal folders")
+    
+    # Collect from Apple Notes
+    if not args.dry_run:
+        print("  • Fetching Apple Notes folders...")
+        notes_connector = AppleNotesConnector()
+        notes_items = notes_connector.get_para_folders()
+        all_items.extend(notes_items)
+        print(f"    Found {len(notes_items)} Apple Notes folders")
+    
+    return all_items
+
+
+def collect_all_data_silent(config_manager: ConfigManager, args: argparse.Namespace, google_auth: GoogleAuthenticator) -> List[PARAItem]:
+    """Collect data silently (no console output)."""
+    all_items = []
+    
+    # Collect from Todoist
+    if not args.dry_run:
+        # Determine next action label (CLI override takes precedence)
+        next_action_label = config_manager.next_action_label
+        if hasattr(args, 'next_action_label') and args.next_action_label:
+            next_action_label = args.next_action_label
+        
+        # Skip next actions if requested
+        if hasattr(args, 'skip_next_actions') and args.skip_next_actions:
+            next_action_label = None  # This will disable next action checking
+        
+        todoist_connector = TodoistConnector(
+            config_manager.todoist_token,
+            next_action_label=next_action_label or "next"
+        )
+        todoist_items = todoist_connector.get_projects()
+        all_items.extend(todoist_items)
+    
+    # Collect from Google Drive (Work)
+    if not args.dry_run:
+        work_credentials = google_auth.get_credentials('work')
+        work_connector = GDriveConnector(work_credentials, 'work')
+        work_items = work_connector.get_para_folders(config_manager.gdrive_base_folder_name)
+        all_items.extend(work_items)
+    
+    # Collect from Google Drive (Personal)
+    if not args.dry_run:
+        personal_credentials = google_auth.get_credentials('personal')
+        personal_connector = GDriveConnector(personal_credentials, 'personal')
+        personal_items = personal_connector.get_para_folders(config_manager.gdrive_base_folder_name)
+        all_items.extend(personal_items)
+    
+    # Collect from Apple Notes
+    if not args.dry_run:
+        notes_connector = AppleNotesConnector()
+        notes_items = notes_connector.get_para_folders()
+        all_items.extend(notes_items)
+    
+    return all_items
+
+
+def compare_items_verbose(filtered_items: List[PARAItem], args: argparse.Namespace):
+    """Compare items with verbose output."""
+    print(f"\n📊 Analyzing {len(filtered_items)} items...")
+    comparator = ItemComparator(
+        similarity_threshold=args.threshold,
+        strict_mode=False
+    )
+    return comparator.compare_items(filtered_items)
+
+
+def compare_items_silent(filtered_items: List[PARAItem], args: argparse.Namespace):
+    """Compare items silently."""
+    comparator = ItemComparator(
+        similarity_threshold=args.threshold,
+        strict_mode=False
+    )
+    return comparator.compare_items(filtered_items)
+
+
 def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -> int:
-    """Handle audit mode operations."""
+    """Handle audit mode with three output modes: default (animation), quiet, or verbose."""
     logger = logging.getLogger(__name__)
+    
+    # Determine output mode early for error handling
+    verbose_mode = args.verbose
+    quiet_mode = args.quiet
+    animation_mode = not verbose_mode and not quiet_mode  # Default
     
     try:
         # Load and validate configuration
@@ -320,146 +458,123 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
         google_auth = GoogleAuthenticator(config_manager)
         todoist_auth = TodoistAuthenticator(config_manager)
         
-        # Check authentication status
-        print("🔐 Authentication Status:")
-        print("-" * 25)
-        
-        # Todoist status
-        todoist_valid = todoist_auth.test_connection()
-        print(f"  • Todoist API: {'✅ Connected' if todoist_valid else '❌ Not connected'}")
-        
-        # Google Drive status
-        work_auth = google_auth.is_authenticated('work')
-        personal_auth = google_auth.is_authenticated('personal')
-        print(f"  • Work Google Drive: {'✅ Authenticated' if work_auth else '❌ Not authenticated'}")
-        print(f"  • Personal Google Drive: {'✅ Authenticated' if personal_auth else '❌ Not authenticated'}")
+        # Authentication check (only in verbose mode)
+        if verbose_mode:
+            print("🔐 Authentication Status:")
+            print("-" * 25)
+            
+            # Todoist status
+            todoist_valid = todoist_auth.test_connection()
+            print(f"  • Todoist API: {'✅ Connected' if todoist_valid else '❌ Not connected'}")
+            
+            # Google Drive status
+            work_auth = google_auth.is_authenticated('work')
+            personal_auth = google_auth.is_authenticated('personal')
+            print(f"  • Work Google Drive: {'✅ Authenticated' if work_auth else '❌ Not authenticated'}")
+            print(f"  • Personal Google Drive: {'✅ Authenticated' if personal_auth else '❌ Not authenticated'}")
+        else:
+            # Silent authentication check
+            todoist_valid = todoist_auth.test_connection()
+            work_auth = google_auth.is_authenticated('work')
+            personal_auth = google_auth.is_authenticated('personal')
         
         if not (todoist_valid and work_auth and personal_auth):
-            print("\n⚠️  Some services are not properly authenticated.")
-            print("💡 Run 'para-auditor --setup' to configure authentication")
+            print("❌ Authentication check failed")
+            print("The following services need attention:")
+
+            # Provide detailed Todoist reason if available
+            if not todoist_valid:
+                details = {}
+                try:
+                    details = todoist_auth.validate_connection_detailed() or {}
+                except Exception:
+                    details = {}
+
+                if not details.get('token_configured', True):
+                    print("  • Todoist: API token not configured")
+                elif details.get('token_configured') and not details.get('token_valid', False):
+                    print("  • Todoist: API token is invalid")
+                elif details.get('error'):
+                    print(f"  • Todoist: {details.get('error')}")
+                else:
+                    print("  • Todoist: Not connected")
+
+            # Google Drive account-specific status
+            if not work_auth:
+                print("  • Work Google Drive: Not authenticated")
+            if not personal_auth:
+                print("  • Personal Google Drive: Not authenticated")
+
+            print("\n💡 Run 'para-auditor --setup' to configure authentication")
             return 1
         
-        # Run the audit
-        print("\n🔍 Starting PARA Audit...")
-        print("-" * 23)
+        # Data collection with appropriate output mode
+        if verbose_mode:
+            print("\n🔍 Starting PARA Audit...")
+            print("-" * 23)
+            all_items = collect_all_data_verbose(config_manager, args, google_auth)
+        elif quiet_mode:
+            all_items = collect_all_data_silent(config_manager, args, google_auth)
+        else:  # animation_mode (default)
+            with spinner("🔄 Auditing PARA organization"):
+                all_items = collect_all_data_silent(config_manager, args, google_auth)
         
-        try:
-            # Collect data from all sources
-            print("📥 Collecting data from sources...")
-            all_items = []
-            
-            # Collect from Todoist
-            if not args.dry_run:
-                print("  • Fetching Todoist projects...")
-                
-                # Determine next action label (CLI override takes precedence)
-                next_action_label = config_manager.next_action_label
-                if hasattr(args, 'next_action_label') and args.next_action_label:
-                    next_action_label = args.next_action_label
-                
-                # Skip next actions if requested
-                if hasattr(args, 'skip_next_actions') and args.skip_next_actions:
-                    print("    Skipping next action checks as requested")
-                    next_action_label = None  # This will disable next action checking
-                
-                todoist_connector = TodoistConnector(
-                    config_manager.todoist_token,
-                    next_action_label=next_action_label or "next"
-                )
-                todoist_items = todoist_connector.get_projects()
-                all_items.extend(todoist_items)
-                
-                # Show next action info if enabled
-                if next_action_label and not (hasattr(args, 'skip_next_actions') and args.skip_next_actions):
-                    print(f"    Found {len(todoist_items)} Todoist projects (checking @{next_action_label} labels)")
-                else:
-                    print(f"    Found {len(todoist_items)} Todoist projects")
-            
-            # Collect from Google Drive (Work)
-            if not args.dry_run:
-                print("  • Fetching work Google Drive folders...")
-                work_credentials = google_auth.get_credentials('work')
-                work_connector = GDriveConnector(work_credentials, 'work')
-                work_items = work_connector.get_para_folders(config_manager.gdrive_base_folder_name)
-                all_items.extend(work_items)
-                print(f"    Found {len(work_items)} work folders")
-            
-            # Collect from Google Drive (Personal)
-            if not args.dry_run:
-                print("  • Fetching personal Google Drive folders...")
-                personal_credentials = google_auth.get_credentials('personal')
-                personal_connector = GDriveConnector(personal_credentials, 'personal')
-                personal_items = personal_connector.get_para_folders(config_manager.gdrive_base_folder_name)
-                all_items.extend(personal_items)
-                print(f"    Found {len(personal_items)} personal folders")
-            
-            # Collect from Apple Notes
-            if not args.dry_run:
-                print("  • Fetching Apple Notes folders...")
-                notes_connector = AppleNotesConnector()
-                notes_items = notes_connector.get_para_folders()
-                all_items.extend(notes_items)
-                print(f"    Found {len(notes_items)} Apple Notes folders")
-            
-            # Apply filters
-            filtered_items = apply_filters(all_items, args)
-            
-            if args.dry_run:
+        # Apply filters
+        filtered_items = apply_filters(all_items, args)
+        
+        if args.dry_run:
+            if verbose_mode:
                 print("🔍 Dry run mode - showing configuration only")
                 print_audit_configuration(config_manager, args)
-                return 0
-            
-            print(f"\n📊 Analyzing {len(filtered_items)} items...")
-            
-            # Compare items and find inconsistencies
-            comparator = ItemComparator(
-                similarity_threshold=args.threshold,
-                strict_mode=False
-            )
-            comparison_result = comparator.compare_items(filtered_items)
-            
-            # Generate report
-            report_generator = ReportGenerator()
-            
-            # Determine output format
-            output_format = getattr(args, 'format', 'markdown')
-            
-            # Generate metadata
-            metadata_overrides = {
-                'filters_applied': {
-                    'work_only': args.work_only,
-                    'personal_only': args.personal_only,
-                    'projects_only': args.projects_only,
-                    'areas_only': args.areas_only,
-                    'threshold': args.threshold
-                }
-            }
-            
-            # Generate and output report
-            report_content = report_generator.generate_report(
-                result=comparison_result,
-                format_type=output_format,
-                output_path=args.output,
-                metadata_overrides=metadata_overrides
-            )
-            
-            # Print to console if no output file specified
-            if not args.output:
-                print("\n" + "="*60)
-                print(report_content)
-            else:
-                print(f"\n✅ Report saved to: {args.output}")
-            
-            # Print summary only if verbose
-            if args.verbose:
-                print_audit_summary(comparison_result)
-            
             return 0
-            
-        except Exception as e:
-            logger.error(f"Audit failed: {e}")
-            print(f"❌ Audit failed: {e}")
-            return 1
+        
+        # Analysis phase
+        if verbose_mode:
+            comparison_result = compare_items_verbose(filtered_items, args)
+        elif animation_mode:
+            with spinner("📊 Analyzing items"):
+                comparison_result = compare_items_silent(filtered_items, args)
+        else:  # quiet_mode
+            comparison_result = compare_items_silent(filtered_items, args)
+        
+        # Generate report (all modes)
+        report_generator = ReportGenerator()
+        
+        # Determine output format
+        output_format = getattr(args, 'format', 'markdown')
+        
+        # Generate metadata
+        metadata_overrides = {
+            'filters_applied': {
+                'work_only': args.work_only,
+                'personal_only': args.personal_only,
+                'projects_only': args.projects_only,
+                'areas_only': args.areas_only,
+                'threshold': args.threshold
+            }
+        }
+        
+        # Generate and output report
+        report_content = report_generator.generate_report(
+            result=comparison_result,
+            format_type=output_format,
+            output_path=args.output,
+            metadata_overrides=metadata_overrides
+        )
+        
+        # Output report
+        if not args.output:
+            print("\n" + "="*60)
+            print(report_content)
+        else:
+            if not quiet_mode:
+                print(f"\n✅ Report saved to: {args.output}")
+        
+        # Summary (verbose mode only)
+        if verbose_mode:
+            print_audit_summary(comparison_result)
+        
+        return 0
         
     except ConfigError as e:
         logger.error(f"Configuration error: {e}")
@@ -467,8 +582,8 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
         print("💡 Run with --setup to create default configuration")
         return 1
     except Exception as e:
-        logger.error(f"Unexpected error during audit: {e}")
-        print(f"❌ Unexpected error: {e}")
+        logger.error(f"Audit failed: {e}")
+        print(f"❌ Audit failed: {e}")
         return 1
 
 

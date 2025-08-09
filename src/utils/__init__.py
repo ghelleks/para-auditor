@@ -1,1 +1,1 @@
-"""Utility functions and helpers."""
+"""Utility modules for the PARA Auditor."""
