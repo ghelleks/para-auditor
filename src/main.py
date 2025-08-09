@@ -499,11 +499,27 @@ def handle_audit_mode(config_manager: ConfigManager, args: argparse.Namespace) -
                 else:
                     print("  • Todoist: Not connected")
 
+                # Verbose-mode setup reminders for Todoist
+                if verbose_mode:
+                    print("    - Add your token to config.yaml under todoist.api_token")
+                    print("    - Get the token from Todoist Settings → Integrations")
+                    print("    - Then run: para-auditor --setup")
+
             # Google Drive account-specific status
             if not work_auth:
                 print("  • Work Google Drive: Not authenticated")
+                if verbose_mode:
+                    print("    - Ensure OAuth client secrets exist at:")
+                    print(f"      {config_manager.work_client_secrets_path}")
+                    print("    - In Google Cloud Console, enable Drive API and create Desktop OAuth credentials")
+                    print("    - Then run: para-auditor --setup and sign in with your work account domain")
             if not personal_auth:
                 print("  • Personal Google Drive: Not authenticated")
+                if verbose_mode:
+                    print("    - Ensure OAuth client secrets exist at:")
+                    print(f"      {config_manager.personal_client_secrets_path}")
+                    print("    - In Google Cloud Console, enable Drive API and create Desktop OAuth credentials")
+                    print("    - Then run: para-auditor --setup and sign in with your personal account")
 
             print("\n💡 Run 'para-auditor --setup' to configure authentication")
             return 1

@@ -157,7 +157,10 @@ class GoogleAuthenticator:
             
         except Exception as e:
             logger.error(f"OAuth flow failed for {account_type} account: {e}")
-            raise GoogleAuthError(f"OAuth flow failed: {e}")
+            # Provide actionable guidance for common OAuth issues
+            hint_lines = self._build_oauth_error_hint(str(e), account_type, client_secrets_path)
+            hint = "\n" + "\n".join(hint_lines) if hint_lines else ""
+            raise GoogleAuthError(f"OAuth flow failed: {e}{hint}")
     
     def _get_domain_hint(self, account_type: str) -> str:
         """Get domain hint for the account type."""
@@ -168,6 +171,30 @@ class GoogleAuthenticator:
             
         # Remove @ prefix if present
         return domain.lstrip('@') if domain else ''
+
+    def _build_oauth_error_hint(self, error_text: str, account_type: str, client_secrets_path: Path):
+        """Build user-facing hints for common OAuth failures."""
+        hints = []
+        prefix = f"[{account_type} Google Drive]"
+
+        # General reminder
+        hints.append(f"{prefix} Verify your OAuth client secrets file path in config: {client_secrets_path}")
+
+        # Invalid client / unauthorized client issues
+        lowered = error_text.lower()
+        if 'invalid_client' in lowered or 'unauthorized' in lowered or 'unauthorized_client' in lowered:
+            hints.append(f"{prefix} Ensure you created 'Desktop application' OAuth 2.0 credentials (Installed app), not Web/iOS/Android.")
+            hints.append(f"{prefix} The credentials JSON should contain an 'installed' block with redirect_uris including 'http://localhost'.")
+            hints.append(f"{prefix} Re-download the JSON from Google Cloud Console and replace: {client_secrets_path}")
+            hints.append(f"{prefix} Make sure the Google Cloud project and OAuth client have not been deleted or restricted.")
+
+        # Consent screen / test users
+        hints.append(f"{prefix} Confirm OAuth consent screen is configured and your account is allowed (if app is in Testing).")
+
+        # Final step
+        hints.append(f"{prefix} Then run: para-auditor --setup and sign in with the correct {account_type} account.")
+
+        return hints
     
     def _validate_account_domain(self, creds: Credentials, account_type: str):
         """Validate that the authenticated account matches the expected domain."""
