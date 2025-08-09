@@ -248,8 +248,8 @@ class MarkdownFormatter(ReportFormatter):
         return lines
 
     def _format_next_actions_and_issues(self, result: ComparisonResult) -> List[str]:
-        """Combined list of next actions (as checkboxes) and issues/recommendations in the same list."""
-        lines: List[str] = ["## Next Actions and Issues", ""]
+        """Group next actions and recommendations under H2 headers per Todoist project."""
+        lines: List[str] = []
 
         # Build a mapping from project name to next actions and issues
         project_entries = []  # list of tuples (project_name, next_action_tasks:list, issues:list[str])
@@ -277,14 +277,16 @@ class MarkdownFormatter(ReportFormatter):
 
         any_output = False
         for pname, next_tasks, issues in project_entries:
+            lines.append(f"## {pname}")
             # Next actions
             for task in next_tasks:
-                lines.append(f"- [ ] {pname}: {task}")
+                lines.append(f"- [ ] {task}")
                 any_output = True
             # Issues in same list
             for issue in issues:
-                lines.append(f"- {pname}: {issue}")
+                lines.append(f"- {issue}")
                 any_output = True
+            lines.append("")
 
         if not any_output:
             lines.append("(no next actions or issues)")
