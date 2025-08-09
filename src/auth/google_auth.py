@@ -28,7 +28,12 @@ class GoogleAuthenticator:
         """Initialize with configuration manager."""
         self.config_manager = config_manager
         self.scopes = config_manager.google_scopes
-        self.credentials_dir = Path("config/credentials")
+        # Store tokens next to the configured credentials directory, resolved
+        work_path = Path(config_manager.work_client_secrets_path)
+        personal_path = Path(config_manager.personal_client_secrets_path)
+        # Prefer the parent dir of the work secrets if it exists, else personal, else default
+        preferred_dir = work_path.parent if work_path.exists() else personal_path.parent
+        self.credentials_dir = preferred_dir if preferred_dir.exists() else Path("config/credentials").resolve()
         
         # Account-specific client secrets files from configuration
         self.client_secrets_paths = {

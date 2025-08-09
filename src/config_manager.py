@@ -209,12 +209,14 @@ class ConfigManager:
     @property
     def work_client_secrets_path(self) -> str:
         """Get work account client secrets file path."""
-        return self.get("google_drive.work_client_secrets", "config/credentials/work_client_secrets.json")
+        raw_path = self.get("google_drive.work_client_secrets", "config/credentials/work_client_secrets.json")
+        return self._resolve_path(raw_path)
     
     @property
     def personal_client_secrets_path(self) -> str:
         """Get personal account client secrets file path."""
-        return self.get("google_drive.personal_client_secrets", "config/credentials/personal_client_secrets.json")
+        raw_path = self.get("google_drive.personal_client_secrets", "config/credentials/personal_client_secrets.json")
+        return self._resolve_path(raw_path)
     
     @property
     def gdrive_base_folder_name(self) -> str:
@@ -250,3 +252,13 @@ class ConfigManager:
     def check_next_actions(self) -> bool:
         """Get whether to check for next actions."""
         return self.get("todoist.check_next_actions", True)
+
+    # Internal helpers for path resolution
+    def _resolve_path(self, raw_path: str) -> str:
+        """Resolve a file path relative to the config directory if not absolute."""
+        p = Path(raw_path).expanduser()
+        if p.is_absolute():
+            return str(p)
+        # Resolve relative to the directory containing the config file
+        base_dir = self.config_path.parent
+        return str((base_dir / p).resolve())
