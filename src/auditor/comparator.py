@@ -472,7 +472,7 @@ class ItemComparator:
         return inconsistencies
     
     def _check_next_actions(self, group: List[PARAItem]) -> List[Inconsistency]:
-        """Check for missing next actions in Todoist projects.
+        """Check for missing next actions in Todoist projects and areas.
         
         Args:
             group: Group of similar items
@@ -482,26 +482,28 @@ class ItemComparator:
         """
         inconsistencies = []
         
-        # Only check Todoist projects (not areas or items from other sources)
-        todoist_projects = [item for item in group if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT]
+        # Check both Todoist projects and areas
+        todoist_items = [item for item in group if item.source == ItemSource.TODOIST]
         
-        for project in todoist_projects:
-            # Check if project metadata indicates it has next actions
-            has_next_action = project.metadata.get('has_next_action', False)
-            next_action_count = project.metadata.get('next_action_count', 0)
-            next_action_label = project.metadata.get('next_action_label', 'next')
+        for item in todoist_items:
+            # Check if item metadata indicates it has next actions
+            has_next_action = item.metadata.get('has_next_action', False)
+            next_action_count = item.metadata.get('next_action_count', 0)
+            next_action_label = item.metadata.get('next_action_label', 'next')
             
             if not has_next_action:
+                item_type_name = "Project" if item.type == ItemType.PROJECT else "Area"
                 inconsistencies.append(Inconsistency(
                     type=InconsistencyType.MISSING_NEXT_ACTION,
-                    description=f"Project '{project.name}' has no @{next_action_label} actions",
+                    description=f"{item_type_name} '{item.name}' has no @{next_action_label} actions",
                     severity='medium',
-                    items=[project],
+                    items=[item],
                     suggested_action=f"Add at least one task with @{next_action_label} label to define the next action",
                     metadata={
-                        'project_id': project.metadata.get('project_id'),
+                        'project_id': item.metadata.get('project_id'),
                         'next_action_label': next_action_label,
-                        'next_action_count': next_action_count
+                        'next_action_count': next_action_count,
+                        'item_type': item.type.value
                     }
                 ))
         
