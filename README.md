@@ -98,33 +98,36 @@ uv run python -m src.main --audit --verbose
 
 ```bash
 # Setup development environment
-make setup
-# or
 uv sync --extra dev
 
 # Run tests
-make test
-# or
 uv run pytest
 
 # Format code
-make format
-# or
-uv run black src tests && uv run ruff format src tests
+uv run black src tests
+uv run ruff format src tests
 
 # Run linting
-make lint
-# or
-uv run ruff check src tests && uv run mypy src
+uv run ruff check src tests
+uv run mypy src
 
 # Run all checks
-make check
+uv run ruff check src tests && uv run mypy src && uv run pytest
 
-# Clean build artifacts
-make clean
+# Clean build artifacts (use dev script)
+./scripts/dev.sh clean
+
+# Update dependencies
+uv lock
+uv sync
+
+# Build package
+uv build
 ```
 
 ### Development Scripts
+
+The most standard approach with uv is to use direct commands or the development helper script:
 
 ```bash
 # Use the development helper script
@@ -134,7 +137,19 @@ make clean
 ./scripts/dev.sh lint     # Run linting
 ./scripts/dev.sh format   # Format code
 ./scripts/dev.sh check    # Run all checks
+./scripts/dev.sh clean    # Clean build artifacts
 ```
+
+### Direct uv Commands
+
+| Command | Description |
+|---------|-------------|
+| `uv run pytest` | Run tests |
+| `uv run ruff check src tests` | Check code style |
+| `uv run mypy src` | Type checking |
+| `uv run black src tests` | Format code |
+| `uv run python -m src.main --audit` | Run PARA audit |
+| `uv run python -m src.main --setup` | Setup API configuration |
 
 ## Configuration
 

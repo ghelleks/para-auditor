@@ -45,6 +45,7 @@ para-auditor = "src.main:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
