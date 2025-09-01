@@ -4,11 +4,11 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 
 from .config_manager import ConfigManager, ConfigError
 from .auth.google_auth import GoogleAuthenticator, GoogleAuthError
-from .auth.todoist_auth import TodoistAuthenticator, TodoistAuthError
+from .auth.todoist_auth import TodoistAuthenticator
 from .connectors.todoist_connector import TodoistConnector
 from .connectors.gdrive_connector import GDriveConnector
 from .connectors.apple_notes_connector import AppleNotesConnector

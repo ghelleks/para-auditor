@@ -1,6 +1,6 @@
 """Item comparison logic for cross-tool PARA method consistency checking."""
 import logging
-from typing import List, Dict, Set, Optional, Tuple, Any
+from typing import List, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 

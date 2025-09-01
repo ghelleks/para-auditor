@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 
 from .comparator import ComparisonResult, Inconsistency, InconsistencyType
-from ..models.para_item import PARAItem, ItemSource, ItemType, CategoryType
+from ..models.para_item import ItemSource, ItemType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

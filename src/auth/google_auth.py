@@ -1,6 +1,5 @@
 """Google OAuth authentication for Drive API access."""
 
-import os
 import pickle
 import logging
 from pathlib import Path
