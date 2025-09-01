@@ -118,6 +118,11 @@ class ItemComparator:
         
         # Add orphaned item inconsistencies
         for item in orphaned_items:
+            # Skip missing item checks for Areas (inactive Todoist items that begin with emoji)
+            # Areas don't need to be synced across tools
+            if item.source == ItemSource.TODOIST and not item.is_active and item.has_emoji():
+                continue  # Skip orphaned Area items
+                
             inconsistencies.append(Inconsistency(
                 type=InconsistencyType.MISSING_ITEM,
                 description=f"'{item.name}' exists only in {item.source.value}",
@@ -228,27 +233,36 @@ class ItemComparator:
         
         inconsistencies = []
         
-        # Check for status inconsistencies
-        inconsistencies.extend(self._check_status_consistency(group))
+        # Check if this group contains Areas (inactive Todoist items that begin with emoji)
+        # Areas only need next action checks, not cross-service sync checks
+        todoist_items = [item for item in group if item.source == ItemSource.TODOIST]
+        has_todoist_areas = any(not item.is_active and item.has_emoji() for item in todoist_items)
         
-        # Check for type inconsistencies
-        inconsistencies.extend(self._check_type_consistency(group))
-        
-        # Check for category inconsistencies
-        inconsistencies.extend(self._check_category_consistency(group))
-        
-        # Check for account placement issues
-        inconsistencies.extend(self._check_account_placement(group))
-        
-        
-        # Check for name variations
-        inconsistencies.extend(self._check_name_variations(group))
-        
-        # Check for emoji consistency
-        inconsistencies.extend(self._check_emoji_consistency(group))
-        
-        # Check for next actions in Todoist projects
-        inconsistencies.extend(self._check_next_actions(group))
+        if has_todoist_areas:
+            # For Areas: only check next actions, skip cross-service sync checks
+            inconsistencies.extend(self._check_next_actions(group))
+        else:
+            # For Projects: run all cross-service sync checks
+            # Check for status inconsistencies
+            inconsistencies.extend(self._check_status_consistency(group))
+            
+            # Check for type inconsistencies
+            inconsistencies.extend(self._check_type_consistency(group))
+            
+            # Check for category inconsistencies
+            inconsistencies.extend(self._check_category_consistency(group))
+            
+            # Check for account placement issues
+            inconsistencies.extend(self._check_account_placement(group))
+            
+            # Check for name variations
+            inconsistencies.extend(self._check_name_variations(group))
+            
+            # Check for emoji consistency
+            inconsistencies.extend(self._check_emoji_consistency(group))
+            
+            # Check for next actions in Todoist projects
+            inconsistencies.extend(self._check_next_actions(group))
         
         return inconsistencies
     

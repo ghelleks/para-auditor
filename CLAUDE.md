@@ -62,8 +62,22 @@ python -m pytest tests/
 ## Key Implementation Details
 
 ### PARA Classification Rules
-- **Active (Project)**: Favorited in Todoist, Starred in Google Drive, In Apple Notes "Projects" folder
-- **Inactive (Area)**: Not favorited in Todoist, Not starred in Google Drive, In Apple Notes "Areas" folder
+
+#### Projects vs Areas in Todoist
+- **PARA Projects**: Favorited Todoist projects (active projects with defined outcomes)
+  - Must be favorited/starred in Todoist (`is_active=True`)
+  - Subject to full cross-service sync checks (Todoist ↔ Google Drive ↔ Apple Notes)
+  - Audited for consistency across all tools
+
+- **PARA Areas**: Unfavorited Todoist projects that begin with an emoji (ongoing responsibilities)
+  - Must be unfavorited in Todoist (`is_active=False`) 
+  - Must begin with an emoji prefix (📚, 🏠, 💰, etc.)
+  - Only audited for having next actions defined
+  - Skip cross-service sync checks (don't need to exist in Google Drive/Apple Notes)
+
+#### Cross-Tool Status Mapping
+- **Google Drive**: Starred folders = Projects, Unstarred = Areas
+- **Apple Notes**: "Projects" folder = Projects, "Areas" folder = Areas
 
 ### Work/Personal Detection
 - **Work projects**: Those starting with 💼 emoji in their name
@@ -72,12 +86,20 @@ python -m pytest tests/
 - Personal items → personal Google Drive account only
 
 ### Audit Types
-1. Missing items across tools
-2. Status inconsistencies (active/inactive conflicts)
-3. Wrong Google Drive account placement
-4. Naming variations and duplicates
-5. Missing Google Drive links in Todoist
+
+#### For PARA Projects (favorited Todoist projects)
+1. Missing items across tools (Todoist ↔ Google Drive ↔ Apple Notes)
+2. Status inconsistencies (active/inactive conflicts across tools)
+3. Wrong Google Drive account placement (work vs personal)
+4. Naming variations and duplicates across tools
+5. Missing Google Drive links in Todoist tasks
 6. Missing emoji prefixes
+7. Missing next actions (@next label)
+
+#### For PARA Areas (unfavorited + emoji Todoist projects)  
+1. Missing next actions (@next label) - **only check performed**
+   - Areas skip all cross-service sync checks
+   - No requirement to exist in Google Drive or Apple Notes
 
 ## Platform Requirements
 - **macOS required** for Apple Notes integration via AppleScript
