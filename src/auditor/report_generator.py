@@ -248,36 +248,37 @@ class MarkdownFormatter(ReportFormatter):
         return lines
 
     def _format_next_actions_and_issues(self, result: ComparisonResult) -> List[str]:
-        """Group next actions and recommendations under H2 headers per Todoist project."""
+        """Group next actions and recommendations under H2 headers per Todoist project and area."""
         lines: List[str] = []
 
-        # Build a mapping from project name to next actions and issues
-        project_entries = []  # list of tuples (project_name, next_action_tasks:list, issues:list[str])
+        # Build a mapping from project/area name to next actions and issues
+        item_entries = []  # list of tuples (item_name, item_type, next_action_tasks:list, issues:list[str])
 
-        # Precompute issues per project (as actionable to-do tasks)
-        issues_by_project: Dict[str, List[str]] = {}
+        # Precompute issues per project/area (as actionable to-do tasks)
+        issues_by_item: Dict[str, List[str]] = {}
         for inc in result.inconsistencies:
             # Use suggested_action as the to-do phrasing; fall back to description
             action_text = inc.suggested_action.strip() if inc.suggested_action else inc.description.strip()
             for itm in inc.items:
-                if itm.source == ItemSource.TODOIST and itm.type == ItemType.PROJECT:
-                    pname = itm.raw_name or itm.name
-                    issues_by_project.setdefault(pname, []).append(action_text)
+                if itm.source == ItemSource.TODOIST:  # Include both projects and areas
+                    item_name = itm.raw_name or itm.name
+                    issues_by_item.setdefault(item_name, []).append(action_text)
 
-        # Collect next actions per project
+        # Collect next actions per project/area
         for group in result.item_groups:
             for item in group:
-                if item.source == ItemSource.TODOIST and item.type == ItemType.PROJECT:
-                    pname = item.raw_name or item.name
+                if item.source == ItemSource.TODOIST:  # Include both projects and areas
+                    item_name = item.raw_name or item.name
+                    item_type = "Project" if item.type == ItemType.PROJECT else "Area"
                     next_tasks = item.metadata.get('next_action_tasks', []) or []
-                    project_entries.append((pname, next_tasks, issues_by_project.get(pname, [])))
+                    item_entries.append((item_name, item_type, next_tasks, issues_by_item.get(item_name, [])))
 
-        # Sort by project name
-        project_entries.sort(key=lambda t: t[0])
+        # Sort by item name
+        item_entries.sort(key=lambda t: t[0])
 
         any_output = False
-        for pname, next_tasks, issues in project_entries:
-            lines.append(f"## {pname}")
+        for item_name, item_type, next_tasks, issues in item_entries:
+            lines.append(f"## {item_name}")
             # Next actions
             for task in next_tasks:
                 lines.append(f"- [ ] {task}")

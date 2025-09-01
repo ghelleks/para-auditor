@@ -151,10 +151,8 @@ class TodoistConnector:
             project_color = getattr(project, 'color', None)
             project_order = getattr(project, 'order', 0)
             
-            # Only process favorited projects for PARA method
-            if not is_favorite:
-                logger.debug(f"Skipping non-favorited project: {project_name}")
-                return None
+            # Process both favorited projects (Projects) and non-favorited projects (Areas) for PARA method
+            # Note: We now include areas to check for next actions
             
             # Determine category based on emoji prefix
             category = CategoryType.WORK if project_name.startswith('💼') else CategoryType.PERSONAL
@@ -165,20 +163,20 @@ class TodoistConnector:
                 clean_name = project_name[1:].strip()  # Remove 💼 and any following whitespace
             
             
-            # Check for next action if this is a project
+            # Check for next action in both projects and areas
             has_next_action = False
             next_action_count = 0
             next_action_tasks = []
             
-            if is_favorite:  # Only check for next actions in projects (favorited items)
-                has_next_action = self.check_project_has_next_action(project.id)
-                if has_next_action:
-                    next_action_task_objects = self.get_next_action_tasks_for_project(project.id)
-                    next_action_count = len(next_action_task_objects)
-                    next_action_tasks = [getattr(task, 'content', 'Untitled Task') for task in next_action_task_objects]
-                    logger.debug(f"Project '{project_name}' has {next_action_count} @{self.next_action_label} tasks")
-                else:
-                    logger.debug(f"Project '{project_name}' has no @{self.next_action_label} tasks")
+            # Check for next actions in all projects/areas
+            has_next_action = self.check_project_has_next_action(project.id)
+            if has_next_action:
+                next_action_task_objects = self.get_next_action_tasks_for_project(project.id)
+                next_action_count = len(next_action_task_objects)
+                next_action_tasks = [getattr(task, 'content', 'Untitled Task') for task in next_action_task_objects]
+                logger.debug(f"{'Project' if is_favorite else 'Area'} '{project_name}' has {next_action_count} @{self.next_action_label} tasks")
+            else:
+                logger.debug(f"{'Project' if is_favorite else 'Area'} '{project_name}' has no @{self.next_action_label} tasks")
             
             para_item = PARAItem(
                 name=clean_name,  # Use clean name for matching
@@ -451,6 +449,31 @@ class TodoistConnector:
             logger.warning(f"Label '@{normalized_label}' validation failed: {e}")
             return False
     
+    def get_areas_missing_next_actions(self) -> List:
+        """Get all areas (non-favorited projects) that don't have next action tasks.
+        
+        Returns:
+            List of PARAItem objects representing areas without next actions
+        """
+        try:
+            all_items = self.get_projects()  # This now includes both projects and areas
+            areas_without_next = []
+            
+            for item in all_items:
+                # Only check areas (non-favorited items)
+                if item.type == ItemType.AREA:
+                    has_next = item.metadata.get('has_next_action', False)
+                    if not has_next:
+                        areas_without_next.append(item)
+                        logger.debug(f"Area '{item.raw_name}' missing @{self.next_action_label} task")
+            
+            logger.info(f"Found {len(areas_without_next)} areas missing @{self.next_action_label} tasks")
+            return areas_without_next
+            
+        except Exception as e:
+            logger.error(f"Error finding areas missing next actions: {e}")
+            return []
+
     def test_connection(self) -> bool:
         """Test connection to Todoist API.
         
