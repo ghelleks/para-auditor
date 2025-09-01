@@ -2,7 +2,7 @@
 
 import logging
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 

@@ -15,10 +15,21 @@ PARA Auditor checks that your projects and areas are properly aligned across you
 ## Quick Start
 
 ### 1. Install Dependencies
+
+**Using uv (recommended):**
+```bash
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install project dependencies
+uv sync
+```
+
+**Using pip (legacy):**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt.bak
 ```
 
 ### 2. Setup Configuration
@@ -34,17 +45,23 @@ pip install -r requirements.txt
 
 ### 3. Authenticate Services
 ```bash
-# Interactive setup for all services
+# Interactive setup for all services (uv)
+uv run python -m src.main --setup
+# or using the script
 ./para-auditor --setup
 ```
 
 ### 4. Run Audit
 ```bash
-# Run full audit
-./para-auditor
+# Run full audit (uv)
+uv run python -m src.main --audit
+# or using the script
+./para-auditor --audit
 
 # Or with detailed output
-./para-auditor --verbose
+uv run python -m src.main --audit --verbose
+# or using the script
+./para-auditor --audit --verbose
 ```
 
 ## How It Works
@@ -71,8 +88,68 @@ pip install -r requirements.txt
 ## Requirements
 
 - **macOS** (for Apple Notes integration)
-- **Python 3.8+**
+- **Python 3.9+** (3.8 supported with legacy pip install)
+- **uv** (recommended package manager) or pip
 - **API Access**: Todoist API token, Google OAuth credentials
+
+## Development
+
+### Using uv (recommended)
+
+```bash
+# Setup development environment
+uv sync --extra dev
+
+# Run tests
+uv run pytest
+
+# Format code
+uv run black src tests
+uv run ruff format src tests
+
+# Run linting
+uv run ruff check src tests
+uv run mypy src
+
+# Run all checks
+uv run ruff check src tests && uv run mypy src && uv run pytest
+
+# Clean build artifacts (use dev script)
+./scripts/dev.sh clean
+
+# Update dependencies
+uv lock
+uv sync
+
+# Build package
+uv build
+```
+
+### Development Scripts
+
+The most standard approach with uv is to use direct commands or the development helper script:
+
+```bash
+# Use the development helper script
+./scripts/dev.sh setup    # Initial setup
+./scripts/dev.sh run --help  # Run with args
+./scripts/dev.sh test     # Run tests
+./scripts/dev.sh lint     # Run linting
+./scripts/dev.sh format   # Format code
+./scripts/dev.sh check    # Run all checks
+./scripts/dev.sh clean    # Clean build artifacts
+```
+
+### Direct uv Commands
+
+| Command | Description |
+|---------|-------------|
+| `uv run pytest` | Run tests |
+| `uv run ruff check src tests` | Check code style |
+| `uv run mypy src` | Type checking |
+| `uv run black src tests` | Format code |
+| `uv run python -m src.main --audit` | Run PARA audit |
+| `uv run python -m src.main --setup` | Setup API configuration |
 
 ## Configuration
 

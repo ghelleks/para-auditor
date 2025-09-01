@@ -1,7 +1,7 @@
 """Emoji detection and suggestion logic for PARA method items."""
 import re
 import logging
-from typing import List, Dict, Optional, Tuple, Set, Any
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 

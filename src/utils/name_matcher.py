@@ -1,7 +1,7 @@
 """Name matching utilities for fuzzy string comparison and normalization."""
 import re
 import logging
-from typing import List, Dict, Tuple, Optional, Set
+from typing import List, Dict, Tuple, Optional
 from difflib import SequenceMatcher
 import unicodedata
 
