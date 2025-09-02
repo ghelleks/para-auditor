@@ -668,38 +668,42 @@ def print_audit_configuration(config_manager: ConfigManager, args: argparse.Name
 
 
 def print_project_alignment_view(all_items: List[PARAItem], comparison_result) -> None:
-    """Print project-by-project alignment view."""
-    # Get all Todoist projects as the primary source
+    """Print project-by-project and area-by-area alignment view."""
+    # Get all Todoist projects and areas as the primary source
     todoist_items = [item for item in all_items if item.source == ItemSource.TODOIST]
 
     if not todoist_items:
         print("No Todoist projects found to display alignment for.")
         return
 
-    print("📋 PROJECT ALIGNMENT OVERVIEW")
-    print("=" * 40)
+        print("📋 PROJECT & AREA ALIGNMENT OVERVIEW")
+    print("=" * 45)
     print()
-
+    
     for todoist_item in sorted(todoist_items, key=lambda x: x.name.lower()):
         # Find matching items in other sources
         matching_items = find_matching_items_for_project(todoist_item, all_items, comparison_result)
-
-        # Display project info
+        
+        # Display project/area info
         status_emoji = "✅" if todoist_item.is_active else "⭕"
         category_emoji = "🏢" if todoist_item.category == CategoryType.WORK else "🏠"
-
-        print(f"{status_emoji} {category_emoji} {todoist_item.raw_name or todoist_item.name}")
-
-        # Get all unique issues for this project
-        all_issues = get_project_issues(todoist_item, matching_items, comparison_result)
-
+        item_type = "Project" if todoist_item.is_active else "Area"
+        
+        print(f"{status_emoji} {category_emoji} {todoist_item.raw_name or todoist_item.name} ({item_type})")
+        
+        # Get all unique issues for this project or area
+        all_issues = get_todoist_item_issues(todoist_item, matching_items, comparison_result)
+        
         if all_issues:
             for issue in all_issues:
                 print(f"  • {issue}")
         else:
-            print("  ✅ All systems aligned")
-
-        print()  # Empty line between projects
+            if todoist_item.type == ItemType.AREA:
+                print("  ✅ Area has next actions defined")
+            else:
+                print("  ✅ All systems aligned")
+        
+        print()  # Empty line between projects/areas
 
 
 def find_matching_items_for_project(todoist_item: PARAItem, all_items: List[PARAItem], comparison_result) -> Dict[ItemSource, List[PARAItem]]:
@@ -717,10 +721,19 @@ def find_matching_items_for_project(todoist_item: PARAItem, all_items: List[PARA
     return matching_items
 
 
-def get_project_issues(todoist_item: PARAItem, matching_items: Dict[ItemSource, List[PARAItem]], comparison_result) -> List[str]:
-    """Get all unique issues for a specific Todoist project."""
+def get_todoist_item_issues(todoist_item: PARAItem, matching_items: Dict[ItemSource, List[PARAItem]], comparison_result) -> List[str]:
+    """Get all unique issues for a specific Todoist project or area."""
     issues = set()  # Use set to avoid duplicates
 
+    # Areas only need next action checks, not cross-service sync checks
+    if todoist_item.type == ItemType.AREA:
+        # For areas, only check if they have next actions defined
+        has_next_action = todoist_item.metadata.get('has_next_action', False)
+        if not has_next_action:
+            issues.add("⚠️  Missing next action: Add @next task to this area")
+        return sorted(list(issues))
+
+    # For Projects: run all cross-service sync checks
     # Determine which sources to check based on project category
     if todoist_item.category == CategoryType.WORK:
         expected_sources = [ItemSource.GDRIVE_WORK, ItemSource.APPLE_NOTES]
