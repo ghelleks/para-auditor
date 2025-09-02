@@ -427,5 +427,65 @@ class TestCommandLineIntegration:
             pytest.fail(f"print_project_alignment_view crashed: {e}")
 
 
+class TestEmojiDetection:
+    """Test emoji detection logic for PARA classification."""
+    
+    def test_emoji_detection(self):
+        """Test that emoji detection works correctly for various emoji types."""
+        # Test various emoji prefixes that should be detected
+        emoji_texts = [
+            "📚 Reading List",
+            "🏠 Home Management", 
+            "💼 Work Projects",
+            "💰 Financial Planning",
+            "🏃 Fitness Goals",
+            "🎨 Creative Projects",
+            "📱 Digital Life",
+            "🌱 Garden Planning",
+            "📖 Learning Goals",
+            "🎯 Personal Development"
+        ]
+        
+        # Test non-emoji text that should not be detected
+        non_emoji_texts = [
+            "Random Project",
+            "Work Project",
+            "Personal Task",
+            "Home Renovation",
+            "Website Design",
+            "Meeting Notes",
+            "Project Alpha",
+            "Task List",
+            "Important Item",
+            "General Project"
+        ]
+        
+        # Import the emoji detection method
+        from src.connectors.todoist_connector import TodoistConnector
+        
+        connector = TodoistConnector("dummy_token")
+        
+        # Test emoji detection
+        for text in emoji_texts:
+            assert connector._starts_with_emoji(text), f"Should detect emoji in: {text}"
+        
+        for text in non_emoji_texts:
+            assert not connector._starts_with_emoji(text), f"Should not detect emoji in: {text}"
+    
+    def test_edge_cases(self):
+        """Test edge cases for emoji detection."""
+        from src.connectors.todoist_connector import TodoistConnector
+        
+        connector = TodoistConnector("dummy_token")
+        
+        # Test edge cases
+        assert not connector._starts_with_emoji(""), "Empty string should not have emoji"
+        assert not connector._starts_with_emoji(" "), "Whitespace should not have emoji"
+        assert not connector._starts_with_emoji("123"), "Numbers should not have emoji"
+        assert not connector._starts_with_emoji("abc"), "Letters should not have emoji"
+        assert not connector._starts_with_emoji("@project"), "Special chars should not have emoji"
+        assert not connector._starts_with_emoji("#tag"), "Hash tags should not have emoji"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
