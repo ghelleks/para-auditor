@@ -268,6 +268,11 @@ class MarkdownFormatter(ReportFormatter):
             for itm in inc.items:
                 if itm.source == ItemSource.TODOIST:  # Include both projects and areas
                     item_name = itm.raw_name or itm.name
+                    
+                    # Skip MISSING_NEXT_ACTION inconsistencies for areas since we handle them separately
+                    if inc.type.value == 'missing_next_action' and itm.type == ItemType.AREA:
+                        continue
+                    
                     issues_by_item.setdefault(item_name, []).append(action_text)
 
         # Collect next actions per project/area
